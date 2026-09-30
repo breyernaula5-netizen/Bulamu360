@@ -31,8 +31,9 @@
     .btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--forest);color:#fff;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800;cursor:pointer;margin:3px 0;font-size:13px;min-height:36px}
     .ghost{background:#ede8df;color:var(--ink)}
     .reject,.danger{background:var(--danger);color:#fff}
+    a.danger{color:#fff}
     .approve{background:var(--forest);color:#fff}
-    .summary{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;margin:18px 0}
+    .summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:12px;margin:18px 0}
     .metric{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 26px #2a1f1410}
     .metric span{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
     .metric b{display:block;font-size:30px;margin-top:4px;color:var(--forest)}
@@ -104,8 +105,15 @@
       </div>
       <div class="top-actions">
         <a class="btn ghost" href="/admin/system">System Status</a>
+        <a class="btn ghost" href="/admin/audit">Audit Log</a>
         <a class="btn ghost" href="/admin/insights">Insights</a>
         <a class="btn ghost" href="/admin/orders.csv">Export CSV</a>
+        <a class="btn ghost" href="/admin/leads.csv">Free assessment leads</a>
+        <a class="btn ghost" href="/admin/coach-queue">Coach queue</a>
+        <a class="btn ghost" href="/admin/replacements">Meal replacements</a>
+        <a class="btn ghost" href="/admin/plan-fit">Plan fit</a>
+        <a class="btn ghost" href="/admin/member-progress.csv">Member progress</a>
+        <a class="btn ghost" href="/admin/food-diary.csv">Food diary</a>
         <a class="btn ghost" href="/admin/logout">Logout</a>
       </div>
     </header>
@@ -114,6 +122,10 @@
       <div class="metric pending"><span>Pending</span><b>{{PENDING_COUNT}}</b></div>
       <div class="metric approved"><span>Approved</span><b>{{APPROVED_COUNT}}</b></div>
       <div class="metric rejected"><span>Rejected</span><b>{{REJECTED_COUNT}}</b></div>
+      <div class="metric"><span>Free leads</span><b>{{LEAD_COUNT}}</b></div>
+      <div class="metric pending"><span>Coach queue</span><b>{{COACH_QUEUE_COUNT}}</b></div>
+      <div class="metric pending"><span>Meal swaps</span><b>{{REPLACEMENT_QUEUE_COUNT}}</b></div>
+      <div class="metric pending"><span>Low fit</span><b>{{LOW_FIT_COUNT}}</b></div>
     </section>
 
     <nav class="tabs" aria-label="Admin navigation">
@@ -122,6 +134,9 @@
       <a href="/admin?status=approved">Approved</a>
       <a href="/admin?status=rejected">Rejected</a>
       <a href="/admin/followups">Progress follow-ups</a>
+      <a href="/admin/coach-queue">Coach review queue</a>
+      <a href="/admin/replacements">Meal replacement queue</a>
+      <a href="/admin/plan-fit">Plan fit scores</a>
       <a href="/admin/recipes">Recipe intelligence</a>
       <a href="/admin/clients">Tracker clients</a>
       <a href="/admin/groups">Groups &amp; templates</a>
@@ -153,7 +168,8 @@
     (function(){
       var notice = document.getElementById('templateNotice');
       if (!notice) return;
-      var isTemplatePreview = location.protocol === 'file:' || document.body.textContent.indexOf('{{ROWS_HTML}}') !== -1;
+      var rowsPlaceholder = ['{{', 'ROWS_HTML', '}}'].join('');
+      var isTemplatePreview = location.protocol === 'file:' || document.body.textContent.indexOf(rowsPlaceholder) !== -1;
       if (isTemplatePreview) notice.style.display = 'block';
     })();
   </script>

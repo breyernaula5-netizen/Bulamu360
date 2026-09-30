@@ -69,7 +69,9 @@ const mimeTypes = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml; charset=utf-8',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
@@ -86,6 +88,18 @@ function securityHeaders(extra = {}) {
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     // camera/microphone allowed for this site only: barcode scanning and voice food logging in the tracker.
     'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
+    'Content-Security-Policy': [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+      "img-src 'self' data: blob: https:",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+      // Tracker food lookups: Open Food Facts (barcodes/packaged foods) and USDA FoodData Central (when a personal key is set).
+      "connect-src 'self' https://world.openfoodfacts.org https://api.nal.usda.gov"
+    ].join('; '),
     'Cache-Control': 'no-store',
     ...extra
   };
@@ -95,9 +109,11 @@ function sendJson(res, status, data) {
   res.writeHead(status, {
     ...securityHeaders(),
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Origin': res._corsOrigin || corsOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Credentials': 'true',
+    'Vary': 'Origin'
   });
   res.end(JSON.stringify(data));
 }
@@ -138,15 +154,72 @@ function healthPayload() {
     app: 'Bulamu360',
     version: appVersion,
     storage: supabaseEnabled() ? 'supabase' : 'local-json',
-    emailConfigured: Boolean(apiKey && fromEmail),
+    emailConfigured: Boolean(apiKey && fromEmail && ownerEmail),
+    ownerEmailConfigured: Boolean(ownerEmail),
     publicBaseUrl,
+    allowedOrigins,
+    supabaseStateTable,
+    supabaseStateKey,
+    security: {
+      adminPasswordSet: Boolean(adminPassword && !weakAdminPasswords.has(adminPassword)),
+      productionMode: Boolean(isProduction),
+      sameOriginAdminPostGuard: true,
+      privateStaticFilesBlocked: true
+    },
     time: new Date().toISOString()
   };
 }
 
+function requestHost(req) {
+  return String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+}
+
+function requestProtocol(req) {
+  return String(req.headers['x-forwarded-proto'] || (isProduction ? 'https' : 'http')).split(',')[0].trim().toLowerCase();
+}
+
+function sameOriginUrl(req) {
+  const host = requestHost(req);
+  return host ? `${requestProtocol(req)}://${host}` : '';
+}
+
+function corsOriginForRequest(req) {
+  if (!isProduction) return '*';
+  const origin = String(req.headers.origin || '').trim().replace(/\/+$/, '');
+  if (!origin) return corsOrigin;
+  const allowed = new Set([
+    ...allowedOrigins.map(x => String(x || '').replace(/\/+$/, '')),
+    publicBaseUrl.replace(/\/+$/, ''),
+    sameOriginUrl(req).replace(/\/+$/, '')
+  ].filter(Boolean));
+  if (!allowed.has(origin)) {
+    console.warn('[cors] blocked-or-mismatched origin', {
+      origin,
+      fallback: corsOrigin,
+      path: req.url || '',
+      host: requestHost(req)
+    });
+  }
+  return allowed.has(origin) ? origin : corsOrigin;
+}
+
+function verifySameOriginPost(req, res) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method || '')) return true;
+  const expected = sameOriginUrl(req);
+  const source = String(req.headers.origin || req.headers.referer || '').trim();
+  if (!expected || (!source && !isProduction)) return true;
+  if (source && source.toLowerCase().startsWith(expected.toLowerCase())) return true;
+  sendHtml(res, 403, 'Security check failed. Please reload the admin page and try again.');
+  return false;
+}
+
 function validateDbShape(db) {
-  if (!db || typeof db !== 'object') return { orders: [] };
+  if (!db || typeof db !== 'object') return { orders: [], leads: [], progressEntries: [], foodDiary: [] };
   if (!Array.isArray(db.orders)) db.orders = [];
+  if (!Array.isArray(db.leads)) db.leads = [];
+  if (!Array.isArray(db.progressEntries)) db.progressEntries = [];
+  if (!Array.isArray(db.foodDiary)) db.foodDiary = [];
+  if (!Array.isArray(db.recipeReplacementReviews)) db.recipeReplacementReviews = [];
   return db;
 }
 
@@ -155,7 +228,6 @@ function renderTemplate(filePath, values = {}) {
   for (const [key, value] of Object.entries(values)) {
     html = html.replaceAll(`{{${key}}}`, String(value ?? ''));
   }
-  html = html.replace(/\{\{[A-Z0-9_]+\}\}/g, '0');
   return html;
 }
 
@@ -181,7 +253,7 @@ function readLocalDb() {
   try {
     return validateDbShape(JSON.parse(readFileSync(dbPath, 'utf8')));
   } catch {
-    return { orders: [] };
+    return { orders: [], leads: [], progressEntries: [], foodDiary: [] };
   }
 }
 
@@ -325,7 +397,13 @@ function getCookie(req, name) {
 function isAdmin(req) {
   const sid = getCookie(req, 'bulamu_admin');
   const session = sid && sessions.get(sid);
-  return Boolean(session && session.expires > Date.now());
+  if (!session) return false;
+  if (session.expires <= Date.now()) {
+    sessions.delete(sid);
+    return false;
+  }
+  session.lastSeen = Date.now();
+  return true;
 }
 
 function requireAdmin(req, res) {
@@ -337,6 +415,56 @@ function requireAdmin(req, res) {
 function adminSessionCookie(sid, maxAge = 43200) {
   const secure = isProduction ? '; Secure' : '';
   return `bulamu_admin=${encodeURIComponent(sid || '')}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+function memberSessionCookie(sid, maxAge = 60 * 60 * 24 * 30) {
+  const secure = isProduction ? '; Secure' : '';
+  return `bulamu_member=${encodeURIComponent(sid || '')}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+function getMemberSession(req) {
+  const sid = getCookie(req, 'bulamu_member');
+  const session = sid && sessions.get(`member:${sid}`);
+  if (!session) return null;
+  if (session.expires <= Date.now()) {
+    sessions.delete(`member:${sid}`);
+    return null;
+  }
+  session.lastSeen = Date.now();
+  return session;
+}
+
+function requireMember(req, res) {
+  const session = getMemberSession(req);
+  if (session) return session;
+  redirect(res, '/member/login');
+  return null;
+}
+
+function auditAdminAction(db, req, action, details = {}) {
+  db.auditLog = Array.isArray(db.auditLog) ? db.auditLog : [];
+  const cleanDetails = { ...details };
+  for (const key of ['htmlContent', 'finalHtmlPlan', 'htmlPlan', 'password', 'apiKey', 'token']) {
+    if (key in cleanDetails) cleanDetails[key] = '[redacted]';
+  }
+  db.auditLog.unshift({
+    at: new Date().toISOString(),
+    action,
+    ip: clientIp(req),
+    userAgent: shortText(req.headers['user-agent'] || '', 180),
+    path: String(req.url || '').split('?')[0],
+    details: cleanDetails
+  });
+  db.auditLog = db.auditLog.slice(0, 1000);
+}
+
+function auditSummary(db = readDb()) {
+  const log = Array.isArray(db.auditLog) ? db.auditLog : [];
+  return {
+    count: log.length,
+    latest: log[0] || null,
+    recentSensitiveActions: log.slice(0, 50).filter(x => /approve|reject|delete|edit|resend|followup/i.test(x.action || '')).length
+  };
 }
 
 function makeApprovalCode() {
@@ -394,11 +522,14 @@ function profileFromRecipeRequest(payload = {}) {
     activity: String(payload.activity || '').toLowerCase(),
     budget: String(payload.budget || '').toLowerCase(),
     cooking: String(payload.cooking || '').toLowerCase(),
+    allergies: String(payload.allergies || '').toLowerCase(),
+    notes: String(payload.notes || payload.preferences || payload.foodPreferences || '').toLowerCase(),
     hasDiabetes: conds.includes('diabetes') || text.includes('diabetes'),
     hasHyper: conds.includes('hypertension') || text.includes('hypertension'),
     hasKidney: conds.includes('kidney') || text.includes('kidney'),
     hasGout: conds.includes('gout') || text.includes('gout'),
     hasCholesterol: conds.includes('cholesterol') || text.includes('cholesterol'),
+    hasPMOS: conds.includes('pmos') || conds.includes('pcos') || text.includes('pmos') || text.includes('pcos'),
     hasIBS: conds.includes('ibs') || text.includes('ibs') || text.includes('gut'),
     isPrenatal: text.includes('prenatal') || text.includes('pregnan'),
     isChild: text.includes('child'),
@@ -408,10 +539,36 @@ function profileFromRecipeRequest(payload = {}) {
   };
 }
 
+function profileAvoidTerms(profile = {}) {
+  const raw = [
+    profile.allergies,
+    profile.notes
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (!raw || /none|no allergy|no allergies|not captured|n\/a/.test(raw)) return [];
+  const known = [
+    'egg', 'eggs', 'milk', 'dairy', 'yogurt', 'groundnut', 'groundnuts', 'peanut', 'peanuts',
+    'fish', 'mukene', 'tilapia', 'tuna', 'sardine', 'chicken', 'beef', 'pork',
+    'beans', 'cowpeas', 'lentils', 'chickpea', 'soy', 'tofu', 'gluten', 'wheat',
+    'banana', 'avocado', 'cabbage', 'tomato', 'onion', 'garlic', 'ginger',
+    'nuts', 'tree nuts', 'sesame'
+  ];
+  const terms = new Set();
+  known.forEach(term => {
+    if (raw.includes(term)) terms.add(term);
+  });
+  raw.split(/[,;|/]+/).map(x => x.trim().toLowerCase()).filter(Boolean).forEach(part => {
+    const cleaned = part.replace(/\b(allergy|allergic|avoid|dislike|hate|cannot eat|does not eat|don't eat|do not eat|intolerant|intolerance|sensitive|sensitivity|to|and)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned && cleaned.length >= 3 && cleaned.length <= 24 && !/none|unknown|prefer/.test(cleaned)) terms.add(cleaned);
+  });
+  return Array.from(terms);
+}
+
 function privateRecipeAllowed(recipe, profile) {
   const avoid = Array.isArray(recipe.avoid) ? recipe.avoid.map(x => String(x).toLowerCase()) : [];
   const tags = Array.isArray(recipe.tags) ? recipe.tags.map(x => String(x).toLowerCase()) : [];
-  const text = [recipe.name, recipe.method, recipe.why, ...(recipe.ingredients || []), ...tags].join(' ').toLowerCase();
+  const allergens = Array.isArray(recipe.allergens) ? recipe.allergens.map(x => String(x).toLowerCase()) : [];
+  const text = [recipe.name, recipe.method, recipe.why, recipe.portion, ...(recipe.ingredients || []), ...tags, ...allergens].join(' ').toLowerCase();
+  const avoidTerms = profileAvoidTerms(profile);
   if (profile.hasDiabetes && (avoid.includes('diabetes') || avoid.includes('diabetes_strict'))) return false;
   if (profile.hasKidney && (avoid.includes('kidney') || avoid.includes('kidney_review'))) return false;
   if (profile.hasGout && avoid.includes('gout')) return false;
@@ -419,6 +576,7 @@ function privateRecipeAllowed(recipe, profile) {
   if (profile.hasIBS && (avoid.includes('ibs') || avoid.includes('gut_sensitive'))) return false;
   if (profile.isPrenatal && avoid.includes('pregnancy')) return false;
   if (profile.hasKidney && /avocado|banana|sweet potato|dodo|nakati|sukuma|spinach|beans|lentil|mukene|groundnut/.test(text)) return false;
+  if (avoidTerms.some(term => text.includes(term))) return false;
   return true;
 }
 
@@ -433,6 +591,7 @@ function privateRecipeScore(recipe, profile) {
   if (profile.hasDiabetes && tags.includes('diabetes')) score += 8;
   if (profile.hasKidney && tags.includes('kidney_review')) score += 8;
   if (profile.hasIBS && (tags.includes('ibs') || tags.includes('gut'))) score += 8;
+  if (profile.hasPMOS && (tags.includes('pmos') || tags.includes('pcos'))) score += 8;
   if (profile.isPrenatal && (tags.includes('pregnancy') || tags.includes('prenatal'))) score += 8;
   if (profile.isChild && (tags.includes('child') || tags.includes('family'))) score += 7;
   if (profile.budget === 'low' && (recipe.cost === 'Low' || tags.includes('budget'))) score += 6;
@@ -441,17 +600,421 @@ function privateRecipeScore(recipe, profile) {
   return score;
 }
 
+function recipeTags(recipe = {}) {
+  return Array.isArray(recipe.tags) ? recipe.tags.map(x => String(x).toLowerCase()) : [];
+}
+
+function recipeText(recipe = {}) {
+  return [
+    recipe.name,
+    recipe.method,
+    recipe.why,
+    recipe.portion,
+    recipe.culinary && recipe.culinary.flavourBase,
+    ...(recipe.ingredients || []),
+    ...(recipe.tasteProfile || []),
+    ...recipeTags(recipe)
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function hasRecipeTerm(recipe, terms) {
+  const text = recipeText(recipe);
+  return terms.some(term => text.includes(term));
+}
+
+function recipeCategory(recipe = {}) {
+  const tags = recipeTags(recipe);
+  if (tags.includes('smoothie') || hasRecipeTerm(recipe, ['smoothie'])) return 'smoothie';
+  if (tags.includes('salad') || hasRecipeTerm(recipe, ['salad', 'bowl', 'slaw', 'lettuce'])) return 'salad_bowl';
+  if (tags.includes('soup') || hasRecipeTerm(recipe, ['soup', 'broth'])) return 'soup_light';
+  if (hasRecipeTerm(recipe, ['egg', 'fish', 'tilapia', 'mukene', 'chicken', 'sardine', 'tuna'])) return 'high_protein';
+  if (hasRecipeTerm(recipe, ['beans', 'cowpeas', 'lentils', 'chickpea'])) return 'legume';
+  if (hasRecipeTerm(recipe, ['matooke', 'millet', 'sorghum', 'sweet potato', 'cassava', 'posho', 'maize meal', 'rice'])) return 'cooked_staple';
+  if (hasRecipeTerm(recipe, ['yogurt', 'milk'])) return 'yogurt';
+  return 'balanced';
+}
+
+function isSmoothieLike(recipe = {}) {
+  return recipeCategory(recipe) === 'smoothie' || hasRecipeTerm(recipe, ['smoothie', 'blend ', 'blended drink']);
+}
+
+function isEggRecipe(recipe = {}) {
+  return recipeProteinFamily(recipe) === 'egg' || hasRecipeTerm(recipe, ['egg', 'eggs']);
+}
+
+function hasMealRealismProblem(recipe = {}, meal = '') {
+  const text = recipeText(recipe);
+  if (meal === 'breakfast' && /cabbage.*yogurt|yogurt.*cabbage/.test(text)) return true;
+  if (meal === 'breakfast' && /papaya.*porridge|porridge.*papaya|pawpaw.*porridge|porridge.*pawpaw/.test(text)) return true;
+  if ((meal === 'lunch' || meal === 'dinner') && /smoothie|yogurt cup|fruit cup/.test(text)) return true;
+  if ((meal === 'lunch' || meal === 'dinner') && /porridge/.test(text)) return true;
+  if (meal === 'dinner' && /fruit|papaya|mango|banana/.test(text) && !/stew|soup|chicken|fish|beans|cowpeas|lentils/.test(text)) return true;
+  return false;
+}
+
+function mealRealismScore(recipe = {}, meal = '') {
+  const text = recipeText(recipe);
+  const category = recipeCategory(recipe);
+  let score = 0;
+  if (hasMealRealismProblem(recipe, meal)) score -= 80;
+  if (meal === 'breakfast') {
+    if (/porridge/.test(text) && /egg|milk|yogurt|groundnut|beans/.test(text)) score += 8;
+    if (/katogo|sweet potato|matooke|sorghum|millet|egg|beans|yogurt/.test(text)) score += 7;
+    if (category === 'salad_bowl') score -= 24;
+    if (category === 'smoothie') score -= 8;
+  }
+  if (meal === 'lunch') {
+    if (/matooke|rice|sweet potato|millet|posho|cassava|beans|cowpeas|chicken|fish|tilapia|greens|dodo|nakati|sukuma|cabbage|stew/.test(text)) score += 12;
+    if (category === 'smoothie' || category === 'yogurt') score -= 90;
+    if (/fruit|papaya|mango|banana/.test(text) && !/chicken|fish|beans|cowpeas|lentils|salad|bowl/.test(text)) score -= 35;
+  }
+  if (meal === 'dinner') {
+    if (/soup|stew|greens|vegetable|fish|chicken|beans|cowpeas|pumpkin|cabbage|nakati|dodo|sukuma/.test(text)) score += 12;
+    if (/heavy|large/.test(text)) score -= 8;
+    if (category === 'smoothie' || category === 'yogurt') score -= 90;
+  }
+  if (meal === 'snack') {
+    if (/smoothie|fruit|yogurt|groundnut|cucumber|carrot|tomato/.test(text)) score += 8;
+    if (/matooke|posho|rice|full plate|katogo/.test(text)) score -= 18;
+  }
+  return score;
+}
+
+function recipeProteinFamily(recipe = {}) {
+  if (hasRecipeTerm(recipe, ['egg'])) return 'egg';
+  if (hasRecipeTerm(recipe, ['fish', 'tilapia', 'mukene', 'sardine', 'tuna'])) return 'fish';
+  if (hasRecipeTerm(recipe, ['chicken'])) return 'chicken';
+  if (hasRecipeTerm(recipe, ['beans', 'cowpeas', 'lentils', 'chickpea'])) return 'legume';
+  if (hasRecipeTerm(recipe, ['yogurt', 'milk'])) return 'dairy';
+  if (hasRecipeTerm(recipe, ['groundnut', 'peanut'])) return 'groundnut';
+  return 'other';
+}
+
+function recipeFlavourFamily(recipe = {}) {
+  const base = String(recipe.culinary && (recipe.culinary.flavourBase || recipe.culinary.sauce) || '').toLowerCase();
+  if (base) return base;
+  if (hasRecipeTerm(recipe, ['ginger'])) return 'ginger';
+  if (hasRecipeTerm(recipe, ['lemon', 'lime'])) return 'lemon';
+  if (hasRecipeTerm(recipe, ['groundnut', 'peanut'])) return 'groundnut';
+  if (hasRecipeTerm(recipe, ['tomato'])) return 'tomato';
+  if (hasRecipeTerm(recipe, ['yogurt'])) return 'yogurt';
+  return 'simple';
+}
+
+function desiredMealCategory(meal, index, profile = {}) {
+  const breakfast = profile.hasKidney
+    ? ['high_protein', 'cooked_staple', 'yogurt', 'high_protein', 'cooked_staple', 'balanced', 'high_protein']
+    : ['cooked_staple', 'high_protein', 'yogurt', 'cooked_staple', 'high_protein', 'balanced', 'smoothie'];
+  const lunch = ['cooked_staple', 'salad_bowl', 'high_protein', 'legume', 'salad_bowl', 'cooked_staple', 'high_protein'];
+  const dinner = ['soup_light', 'cooked_staple', 'soup_light', 'high_protein', 'legume', 'soup_light', 'cooked_staple'];
+  const snack = profile.hasKidney
+    ? ['high_protein', 'balanced', 'yogurt', 'balanced', 'high_protein', 'balanced', 'yogurt', 'balanced', 'high_protein', 'balanced', 'yogurt', 'balanced', 'high_protein', 'balanced']
+    : ['yogurt', 'fresh', 'high_protein', 'balanced', 'salad_bowl', 'yogurt', 'fresh', 'high_protein', 'balanced', 'salad_bowl', 'yogurt', 'smoothie', 'high_protein', 'balanced'];
+  const table = { breakfast, lunch, dinner, snack };
+  const list = table[meal] || ['balanced'];
+  return list[index % list.length];
+}
+
+function recipeCulinaryBoost(recipe = {}) {
+  const quality = recipe.quality || {};
+  const culinary = recipe.culinary || {};
+  const practical = recipe.practical || {};
+  let boost = 0;
+  boost += Number(quality.flavourScore || culinary.tasteIntensity || 7) * 0.8;
+  boost += Number(quality.repeatAppealScore || culinary.repeatAppeal || 7) * 0.7;
+  boost += Number(quality.practicalityScore || practical.costScore || 7) * 0.45;
+  boost += Number(culinary.familyAcceptance || 7) * 0.35;
+  if (quality.repeatRisk === 'high') boost -= 7;
+  if (quality.recommendationTier === 'default') boost += 3;
+  if (quality.recommendationTier === 'use-selectively') boost -= 4;
+  return boost;
+}
+
+function fallbackRecipe(meal, id, name, tags, ingredients, method, why, portion, tasteProfile, substitutions = [], extra = {}) {
+  const recipe = {
+    id,
+    meal,
+    name,
+    tags,
+    avoid: extra.avoid || [],
+    time: extra.time || 10,
+    cost: extra.cost || 'Low',
+    ingredients,
+    method,
+    why,
+    portion,
+    tasteProfile,
+    suitability: extra.suitability || {},
+    cautions: extra.cautions || [],
+    allergens: extra.allergens || [],
+    substitutions,
+    nutrition: extra.nutrition || { energy: 'moderate', protein: 'moderate', fibre: 'moderate', glycaemicLoad: 'low to moderate', sodium: 'low' },
+    practicality: extra.practicality || { budget: 'low', equipment: 'none', batchCook: false, marketAccess: 'common' },
+    culinary: {
+      flavourBase: extra.flavourBase || 'fresh simple flavour',
+      texture: extra.texture || ['fresh'],
+      tasteIntensity: extra.tasteIntensity || 7.2,
+      familyAcceptance: extra.familyAcceptance || 7.5,
+      repeatAppeal: extra.repeatAppeal || 7.4,
+      presentation: extra.presentation || 'simple plate or cup'
+    },
+    practical: { marketAvailability: 8, cookingSkill: 2, costScore: 8, prepBurden: 2, localAvailability: 'high' },
+    feedback: { repeatComplaints: 0, dislikedCount: 0 },
+    quality: { overallScore: extra.overallScore || 8, flavourScore: 7.5, practicalityScore: 8.5, affordabilityScore: 8, availabilityScore: 8, familyAcceptanceScore: 7.5, repeatAppealScore: 7.4, repeatRisk: 'low', recommendationTier: 'default' },
+    reviewStatus: 'dietician-reviewed',
+    clinicalReview: 'Fallback culinary-dietician option for variety when allergies, dislikes, or clinical restrictions narrow the main recipe pool.',
+    clinicalNote: extra.clinicalNote || ''
+  };
+  return recipe;
+}
+
+function fallbackRecipesForMeal(meal, profile = {}) {
+  const options = {
+    snack: [
+      fallbackRecipe('snack', 'fb_sn_cucumber_lime', 'Cucumber Lime Crunch Cup', ['snack', 'budget', 'diabetes', 'fresh'], ['cucumber', 'lime or lemon', 'pinch of roasted cumin optional'], 'Slice cucumber and dress with lemon. Add cumin if liked. Do not add table salt.', 'Very low glycaemic, refreshing, cheap, and useful when heavier snacks are not suitable.', '1 to 2 cups cucumber slices.', ['crisp', 'zesty', 'refreshing'], ['Use carrot sticks if cucumber is unavailable', 'Use tomato wedges if tolerated'], { flavourBase: 'fresh lemon-herb', texture: ['crunchy'], avoid: ['kidney_review'] }),
+      fallbackRecipe('snack', 'fb_sn_guava_groundnut', 'Guava with Measured Groundnuts', ['snack', 'budget', 'local', 'fibre'], ['guava', 'unsalted roasted groundnuts'], 'Wash guava and serve with a measured spoon of groundnuts.', 'Adds fibre, crunch, vitamin C, and healthy fat without needing cooking.', '1 medium guava plus 1 tablespoon groundnuts.', ['crunchy', 'sweet-tart', 'nutty'], ['Use orange instead of guava', 'Use plain yogurt instead of groundnuts'], { allergens: ['groundnuts'], avoid: ['kidney_review', 'diabetes_strict'], flavourBase: 'fruit and nut', texture: ['crunchy'] }),
+      fallbackRecipe('snack', 'fb_sn_plain_yogurt_cinnamon', 'Plain Yogurt Cinnamon Cup', ['snack', 'yogurt', 'diabetes', 'quick'], ['plain unsweetened yogurt', 'cinnamon'], 'Serve cold with cinnamon. Do not add sugar.', 'Quick protein-rich snack with gentle acidity and no added sugar.', 'Half to 1 cup plain yogurt.', ['cool', 'creamy', 'lightly spiced'], ['Use lactose-free yogurt if needed', 'Use cucumber if dairy is not tolerated'], { allergens: ['milk'], flavourBase: 'cool yogurt creaminess', texture: ['creamy'] }),
+      fallbackRecipe('snack', 'fb_sn_papaya_lime', 'Papaya Lime Bowl', ['snack', 'fruit', 'light'], ['papaya', 'lime or lemon'], 'Cube papaya and squeeze lime over it.', 'Fresh sweet option that feels like dessert while staying simple and portioned.', 'Half to 1 cup papaya cubes.', ['soft', 'sweet', 'zesty'], ['Use watermelon in a small portion', 'Use orange wedges'], { avoid: ['diabetes_strict', 'kidney_review'], flavourBase: 'fresh lime fruit', texture: ['soft'] }),
+      fallbackRecipe('snack', 'fb_sn_carrot_tomato_plate', 'Carrot Tomato Fresh Plate', ['snack', 'budget', 'fresh', 'diabetes'], ['carrot', 'tomato', 'lemon'], 'Slice carrot and tomato. Add lemon. Keep salt minimal.', 'Cheap colourful snack with crunch and acidity for appetite control.', '1 carrot plus 1 tomato.', ['crunchy', 'fresh', 'zesty'], ['Use cucumber instead of tomato if reflux-prone', 'Use cabbage ribbons instead of carrot'], { flavourBase: 'fresh lemon-herb', texture: ['crunchy'] }),
+      fallbackRecipe('snack', 'fb_sn_avocado_cabbage_spoon', 'Avocado Cabbage Spoon Salad', ['snack', 'salad', 'filling'], ['avocado', 'cabbage', 'lemon'], 'Mash a small avocado portion with shredded cabbage and lemon.', 'Creamy, crunchy, and filling without bread or fried snacks.', 'Quarter avocado plus 1 cup shredded cabbage.', ['creamy', 'crunchy', 'zesty'], ['Use yogurt instead of avocado', 'Use cucumber instead of cabbage'], { avoid: ['kidney_review'], flavourBase: 'fresh lemon-herb', texture: ['creamy', 'crunchy'] }),
+      fallbackRecipe('snack', 'fb_sn_cabbage_lime_ribbons', 'Cabbage Lime Ribbons', ['snack', 'budget', 'salad', 'fresh'], ['cabbage', 'lime or lemon', 'black pepper optional'], 'Shred cabbage finely and massage with lemon for 1 minute. Add pepper if liked.', 'Crisp, cheap, and refreshing when the client needs a no-cook snack.', '1 to 2 cups shredded cabbage.', ['crisp', 'zesty', 'fresh'], ['Use cucumber instead of cabbage', 'Add a spoon of yogurt if dairy is tolerated'], { flavourBase: 'fresh lemon-herb', texture: ['crunchy'] }),
+      fallbackRecipe('snack', 'fb_sn_tomato_avocado_bites', 'Tomato Avocado Bites', ['snack', 'fresh', 'filling'], ['tomato', 'small avocado portion', 'lemon'], 'Top tomato slices with a thin avocado layer and lemon.', 'A creamy fresh snack that feels satisfying without fried food.', '1 tomato plus 2 tablespoons avocado.', ['creamy', 'fresh', 'zesty'], ['Use cucumber slices instead of tomato', 'Use yogurt instead of avocado'], { avoid: ['kidney_review'], flavourBase: 'fresh lemon-herb', texture: ['creamy'] }),
+      fallbackRecipe('snack', 'fb_sn_roasted_chickpea_spoons', 'Roasted Chickpea Spoon Snack', ['snack', 'legume', 'budget'], ['roasted chickpeas', 'lemon or mild spice'], 'Use roasted chickpeas with mild spice and water. Keep salt low.', 'Crunchy budget snack with plant protein and better staying power than biscuits.', '2 to 3 tablespoons roasted chickpeas.', ['crunchy', 'savoury', 'filling'], ['Use groundnuts if chickpeas are unavailable', 'Use yogurt if legumes cause bloating'], { avoid: ['kidney_review', 'ibs'], flavourBase: 'mild spice base', texture: ['crunchy'] })
+    ],
+    breakfast: [
+      fallbackRecipe('breakfast', 'fb_bf_sorghum_cinnamon', 'Sorghum Cinnamon Porridge Cup', ['breakfast', 'budget', 'local'], ['sorghum flour', 'water', 'cinnamon'], 'Cook sorghum flour in water until smooth. Add cinnamon, not sugar.', 'Warm local breakfast with steady energy and simple ingredients.', '180 to 220ml cooked porridge.', ['warm', 'mild', 'familiar'], ['Use millet flour instead', 'Add milk only if tolerated'], { avoid: ['diabetes_strict'], flavourBase: 'warm spice base', texture: ['soft'] }),
+      fallbackRecipe('breakfast', 'fb_bf_yogurt_fruit_oats', 'Yogurt Fruit Oat Cup', ['breakfast', 'yogurt', 'quick'], ['plain yogurt', 'small oats portion', 'seasonal fruit'], 'Layer plain yogurt with a small spoon of oats and chopped fruit.', 'No-cook breakfast that adds protein, fibre, and freshness.', 'Half cup yogurt, 2 tablespoons oats, and half cup fruit.', ['cool', 'creamy', 'fresh'], ['Use papaya instead of banana', 'Use lactose-free yogurt'], { allergens: ['milk'], avoid: ['kidney_review'], flavourBase: 'cool yogurt creaminess', texture: ['creamy'] }),
+      fallbackRecipe('breakfast', 'fb_bf_bean_tomato_cup', 'Bean Tomato Breakfast Cup', ['breakfast', 'budget', 'legume', 'local'], ['cooked beans', 'tomato', 'onion', 'lemon'], 'Warm a small portion of beans with tomato and onion. Finish with lemon.', 'A savoury breakfast for clients who do not want sweet foods every morning.', 'Half cup beans with tomato/onion sauce.', ['savoury', 'hearty', 'zesty'], ['Use cowpeas instead of beans', 'Use yogurt if beans cause bloating'], { avoid: ['kidney_review', 'ibs'], flavourBase: 'tomato-onion-garlic', texture: ['soft'] }),
+      fallbackRecipe('breakfast', 'fb_bf_sweet_potato_greens', 'Measured Sweet Potato Greens Breakfast', ['breakfast', 'local', 'cooked_staple'], ['small sweet potato', 'sukuma or cabbage', 'tomato'], 'Boil a small sweet potato and serve with quickly cooked greens and tomato.', 'A familiar cooked breakfast with fibre and colour, kept portion-controlled.', '1 small sweet potato plus 1 to 2 cups greens.', ['familiar', 'soft', 'savoury'], ['Use pumpkin instead of sweet potato', 'Use cabbage instead of sukuma'], { avoid: ['kidney_review'], flavourBase: 'tomato-onion-garlic', texture: ['soft'] }),
+      fallbackRecipe('breakfast', 'fb_bf_cabbage_yogurt_bowl', 'Cabbage Yogurt Breakfast Bowl', ['breakfast', 'salad', 'yogurt', 'quick'], ['cabbage', 'plain yogurt', 'lemon', 'tomato'], 'Mix shredded cabbage with plain yogurt, lemon, and tomato. Serve cold.', 'Fresh, creamy, and light for mornings when cooked food feels heavy.', '1 cup cabbage plus half cup yogurt.', ['cool', 'creamy', 'crunchy'], ['Use cucumber instead of cabbage', 'Use avocado instead of yogurt'], { allergens: ['milk'], flavourBase: 'cool yogurt creaminess', texture: ['creamy', 'crunchy'] }),
+      fallbackRecipe('breakfast', 'fb_bf_pumpkin_millet_spoon', 'Pumpkin Millet Breakfast Spoon', ['breakfast', 'local', 'budget'], ['pumpkin', 'small millet portion', 'ginger'], 'Mash cooked pumpkin with a small spoon of millet porridge and ginger.', 'Soft warm breakfast with natural sweetness and less heaviness than a large porridge bowl.', '1 cup pumpkin plus 100ml thick millet porridge.', ['warming', 'soft', 'slightly sweet'], ['Use sorghum instead of millet', 'Use carrot instead of pumpkin'], { avoid: ['kidney_review'], flavourBase: 'warming soup base', texture: ['soft'] })
+    ],
+    lunch: [
+      fallbackRecipe('lunch', 'fb_lu_cabbage_bean_bowl', 'Cabbage Bean Lemon Bowl', ['lunch', 'salad', 'budget', 'legume'], ['cabbage', 'beans', 'tomato', 'lemon'], 'Toss cooked beans with cabbage, tomato, and lemon. Keep oil minimal.', 'A cheap bowl that gives fibre, colour, and plant protein.', 'Half cup beans plus 2 cups cabbage/tomato.', ['fresh', 'zesty', 'filling'], ['Use cowpeas instead of beans', 'Use chicken instead if beans cause bloating'], { avoid: ['kidney_review', 'ibs'], flavourBase: 'fresh lemon-herb', texture: ['crunchy'] })
+    ],
+    dinner: [
+      fallbackRecipe('dinner', 'fb_dn_pumpkin_ginger_soup', 'Pumpkin Ginger Light Soup', ['dinner', 'soup', 'budget', 'light'], ['pumpkin', 'ginger', 'tomato', 'onion'], 'Simmer pumpkin with ginger, tomato, and onion until soft. Blend or mash.', 'Light dinner that is warm, cheap, and easier than heavy evening starches.', '1.5 to 2 cups soup plus protein if needed.', ['warming', 'soft', 'slightly sweet'], ['Add shredded chicken if protein is needed', 'Use carrot instead of pumpkin'], { avoid: ['kidney_review'], flavourBase: 'warming soup base', texture: ['soft'] })
+    ]
+  };
+  return (options[meal] || []).filter(recipe => privateRecipeAllowed(recipe, profile));
+}
+
+function privateRecipeVarietyScore(recipe, profile, used, meal, index) {
+  const category = recipeCategory(recipe);
+  const protein = recipeProteinFamily(recipe);
+  const flavour = recipeFlavourFamily(recipe);
+  const desired = desiredMealCategory(meal, index, profile);
+  let score = privateRecipeScore(recipe, profile) + recipeCulinaryBoost(recipe) + mealRealismScore(recipe, meal);
+  if (category === desired) score += 18;
+  if (desired === 'high_protein' && ['egg', 'fish', 'chicken', 'legume', 'dairy'].includes(protein)) score += 10;
+  if (desired === 'balanced' && !used.names.has(recipe.name)) score += 4;
+  if (profile.hasKidney && ['smoothie', 'salad_bowl', 'legume'].includes(category)) score -= 12;
+  if (profile.hasIBS && ['legume'].includes(category)) score -= 7;
+  if (used.names.has(recipe.name)) score -= 100;
+  score -= (used.categories[category] || 0) * 7;
+  score -= (used.proteins[protein] || 0) * 5;
+  score -= (used.flavours[flavour] || 0) * 3;
+  if (index > 0 && used.lastCategory === category) score -= 12;
+  if (index > 0 && used.lastProtein === protein && protein !== 'other') score -= 8;
+  return score;
+}
+
+function recipeAllowedForDaySlot(recipe, profile, slot, dayUsed = {}, weekUsed = {}) {
+  const meal = slot.meal;
+  if (!recipe) return false;
+  if (hasMealRealismProblem(recipe, meal)) return false;
+  if ((meal === 'lunch' || meal === 'dinner') && isSmoothieLike(recipe)) return false;
+  if (isSmoothieLike(recipe) && (dayUsed.smoothies || 0) >= 1) return false;
+  if (isSmoothieLike(recipe) && ((weekUsed.categories || {}).smoothie || 0) >= 2) return false;
+  if (isEggRecipe(recipe) && (dayUsed.eggs || 0) >= 1) return false;
+  if (isEggRecipe(recipe) && ((weekUsed.proteins || {}).egg || 0) >= 3) return false;
+  if ((profile.hasCholesterol || profile.hasKidney) && isEggRecipe(recipe) && (dayUsed.eggs || 0) >= 1) return false;
+  if (meal === 'lunch' && ['smoothie', 'yogurt'].includes(recipeCategory(recipe))) return false;
+  if (meal === 'dinner' && ['smoothie', 'yogurt'].includes(recipeCategory(recipe))) return false;
+  if (meal === 'breakfast' && recipeCategory(recipe) === 'salad_bowl') return false;
+  return true;
+}
+
+function noteDayUse(recipe, dayUsed = {}) {
+  const protein = recipeProteinFamily(recipe);
+  const category = recipeCategory(recipe);
+  dayUsed.proteins = dayUsed.proteins || {};
+  dayUsed.categories = dayUsed.categories || {};
+  dayUsed.proteins[protein] = (dayUsed.proteins[protein] || 0) + 1;
+  dayUsed.categories[category] = (dayUsed.categories[category] || 0) + 1;
+  if (isSmoothieLike(recipe)) dayUsed.smoothies = (dayUsed.smoothies || 0) + 1;
+  if (isEggRecipe(recipe)) dayUsed.eggs = (dayUsed.eggs || 0) + 1;
+}
+
+function daySlotScore(recipe, profile, slot, dayUsed, weekUsed, index) {
+  const protein = recipeProteinFamily(recipe);
+  const category = recipeCategory(recipe);
+  let score = privateRecipeVarietyScore(recipe, profile, weekUsed, slot.meal, index);
+  if (category === slot.category) score += 24;
+  score += mealRealismScore(recipe, slot.meal);
+  if (slot.meal === 'lunch' && ['cooked_staple', 'salad_bowl', 'high_protein', 'legume'].includes(category)) score += 12;
+  if (slot.meal === 'dinner' && ['soup_light', 'cooked_staple', 'high_protein', 'legume', 'salad_bowl'].includes(category)) score += 12;
+  if ((dayUsed.proteins || {})[protein]) score -= 25 * dayUsed.proteins[protein];
+  if ((dayUsed.categories || {})[category]) score -= 12 * dayUsed.categories[category];
+  if (isSmoothieLike(recipe) && slot.meal !== 'breakfast' && slot.meal !== 'snack') score -= 100;
+  if (isEggRecipe(recipe) && (dayUsed.eggs || 0)) score -= 100;
+  return score;
+}
+
+function pickForDaySlot(candidates, profile, slot, dayUsed, weekUsed, index) {
+  const allowed = candidates.filter(recipe => recipeAllowedForDaySlot(recipe, profile, slot, dayUsed, weekUsed));
+  const pool = allowed.length ? allowed : candidates.filter(recipe => !isSmoothieLike(recipe));
+  const unusedPool = pool.filter(recipe => !weekUsed.names.has(recipe.name));
+  const unusedSafeAny = candidates.filter(recipe => !weekUsed.names.has(recipe.name) && recipeAllowedForDaySlot(recipe, profile, { ...slot, category: recipeCategory(recipe) }, dayUsed, weekUsed));
+  const finalPool = unusedPool.length ? unusedPool : unusedSafeAny.length ? unusedSafeAny : pool;
+  return finalPool
+    .sort((a, b) => daySlotScore(b, profile, slot, dayUsed, weekUsed, index) - daySlotScore(a, profile, slot, dayUsed, weekUsed, index) || String(a.name).localeCompare(String(b.name)))[0]
+    || finalPool.sort((a, b) => daySlotScore(b, profile, slot, dayUsed, weekUsed, index) - daySlotScore(a, profile, slot, dayUsed, weekUsed, index))[0]
+    || null;
+}
+
+function pickRealisticReplacement(byMeal, profile, slot, dayUsed, weekUsed, index) {
+  const pool = byMeal[slot.meal] || [];
+  return pickForDaySlot(pool, profile, slot, dayUsed, weekUsed, index);
+}
+
+function noteRecipeUse(recipe, used) {
+  const category = recipeCategory(recipe);
+  const protein = recipeProteinFamily(recipe);
+  const flavour = recipeFlavourFamily(recipe);
+  used.names.add(recipe.name);
+  used.categories[category] = (used.categories[category] || 0) + 1;
+  used.proteins[protein] = (used.proteins[protein] || 0) + 1;
+  used.flavours[flavour] = (used.flavours[flavour] || 0) + 1;
+  used.lastCategory = category;
+  used.lastProtein = protein;
+}
+
+function buildWeeklyMealPlan(byMeal, profile, weekIndex = 0) {
+  const weekUsed = { names: new Set(), categories: {}, proteins: {}, flavours: {}, lastCategory: '', lastProtein: '' };
+  const breakfastPattern = profile.hasKidney
+    ? ['cooked_staple', 'high_protein', 'yogurt', 'cooked_staple', 'balanced', 'high_protein', 'cooked_staple']
+    : ['cooked_staple', 'high_protein', 'yogurt', 'cooked_staple', 'high_protein', 'balanced', 'smoothie'];
+  const snackPattern = profile.hasKidney
+    ? [['balanced', 'fresh'], ['high_protein', 'balanced'], ['yogurt', 'fresh'], ['balanced', 'salad_bowl'], ['fresh', 'balanced'], ['high_protein', 'balanced'], ['yogurt', 'balanced']]
+    : [['fresh', 'yogurt'], ['balanced', 'fresh'], ['high_protein', 'salad_bowl'], ['balanced', 'fresh'], ['yogurt', 'legume'], ['fresh', 'balanced'], ['high_protein', 'smoothie']];
+  const lunchPattern = ['cooked_staple', 'salad_bowl', 'high_protein', 'legume', 'cooked_staple', 'salad_bowl', 'high_protein'];
+  const dinnerPattern = ['soup_light', 'cooked_staple', 'high_protein', 'soup_light', 'legume', 'salad_bowl', 'cooked_staple'];
+  const plan = [];
+  for (let day = 0; day < 7; day += 1) {
+    const patternDay = (day + (weekIndex * 2)) % 7;
+    const dayUsed = { smoothies: 0, eggs: 0, proteins: {}, categories: {} };
+    const slots = [
+      { key: 'breakfast', meal: 'breakfast', category: breakfastPattern[patternDay] },
+      { key: 'snack1', meal: 'snack', category: snackPattern[patternDay][0] },
+      { key: 'lunch', meal: 'lunch', category: lunchPattern[patternDay] },
+      { key: 'snack2', meal: 'snack', category: snackPattern[patternDay][1] },
+      { key: 'dinner', meal: 'dinner', category: dinnerPattern[patternDay] }
+    ];
+    const dayPlan = {};
+    slots.forEach((slot, slotIndex) => {
+      const pick = pickForDaySlot(byMeal[slot.meal] || [], profile, slot, dayUsed, weekUsed, (weekIndex * 35) + (day * 5) + slotIndex);
+      if (pick) {
+        dayPlan[slot.key] = pick;
+        noteDayUse(pick, dayUsed);
+        noteRecipeUse(pick, weekUsed);
+      }
+    });
+    plan.push(dayPlan);
+  }
+  return plan;
+}
+
+function repairMealPlanRealism(plan = [], byMeal = {}, profile = {}, weekIndex = 0) {
+  const weekUsed = { names: new Set(), categories: {}, proteins: {}, flavours: {}, lastCategory: '', lastProtein: '' };
+  const slotDefs = [
+    { key: 'breakfast', meal: 'breakfast', category: 'cooked_staple' },
+    { key: 'snack1', meal: 'snack', category: 'fresh' },
+    { key: 'lunch', meal: 'lunch', category: 'cooked_staple' },
+    { key: 'snack2', meal: 'snack', category: 'balanced' },
+    { key: 'dinner', meal: 'dinner', category: 'soup_light' }
+  ];
+  return plan.map((dayPlan, dayIndex) => {
+    const dayUsed = { smoothies: 0, eggs: 0, proteins: {}, categories: {} };
+    const next = { ...dayPlan };
+    slotDefs.forEach((slot, slotIndex) => {
+      const current = next[slot.key];
+      const category = current ? recipeCategory(current) : '';
+      const bad = !current
+        || hasMealRealismProblem(current, slot.meal)
+        || (slot.meal === 'breakfast' && category === 'salad_bowl')
+        || ((slot.meal === 'lunch' || slot.meal === 'dinner') && ['smoothie', 'yogurt'].includes(category));
+      if (bad) {
+        const replacement = pickRealisticReplacement(byMeal, profile, slot, dayUsed, weekUsed, (weekIndex * 35) + (dayIndex * 5) + slotIndex);
+        if (replacement) next[slot.key] = replacement;
+      }
+      if (next[slot.key]) {
+        noteDayUse(next[slot.key], dayUsed);
+        noteRecipeUse(next[slot.key], weekUsed);
+      }
+    });
+    return next;
+  });
+}
+
+function mealWeekMeta(weekIndex, familyPlan = false) {
+  const familyMeta = [
+    ['Week 1 - Foundation Menu', 'Build the shared household rhythm, record disliked meals, hunger, leftovers, symptoms, and portion needs for each member.'],
+    ['Week 2 - Variety and Acceptance Menu', 'Rotate proteins, vegetables, sauces, and staples so the family does not feel trapped in one menu.'],
+    ['Week 3 - Practicality and Budget Menu', 'Use batch cooking, affordable baskets, school/work lunches, and realistic leftovers to reduce cooking pressure.'],
+    ['Week 4 - Review and Adjustment Menu', 'Keep the best accepted meals, remove weak meals, and adjust portions by age, activity, appetite, and condition.']
+  ];
+  const individualMeta = [
+    ['Week 1 - Foundation Menu', 'Learn the meal rhythm, portions, water routine, protein consistency, and which meals are realistic.'],
+    ['Week 2 - Variety Menu', 'Rotate proteins, vegetables, soups, salads, and cooked staples so the plan feels enjoyable and sustainable.'],
+    ['Week 3 - Precision Menu', 'Adjust portions using hunger, energy, symptoms, measurements, glucose/BP readings, or lab guidance where relevant.'],
+    ['Week 4 - Continuation Menu', 'Keep the strongest meals and prepare for the next 30 days using the same structure with better personal feedback.']
+  ];
+  return (familyPlan ? familyMeta : individualMeta)[weekIndex] || [`Week ${weekIndex + 1}`, 'Continue the same structure while rotating meals, portions, and practical swaps.'];
+}
+
+function buildMultiWeekMealPlan(byMeal, profile, weeks = 4, familyPlan = false) {
+  return Array.from({ length: weeks }, (_, weekIndex) => {
+    const [title, focus] = mealWeekMeta(weekIndex, familyPlan);
+    return {
+      title,
+      focus,
+      days: repairMealPlanRealism(buildWeeklyMealPlan(byMeal, profile, weekIndex), byMeal, profile, weekIndex)
+    };
+  });
+}
+
+function buildMealSequence(candidates, profile, meal, slots) {
+  candidates = [...candidates, ...fallbackRecipesForMeal(meal, profile)]
+    .filter((recipe, index, list) => list.findIndex(item => item.name === recipe.name) === index);
+  const used = { names: new Set(), categories: {}, proteins: {}, flavours: {}, lastCategory: '', lastProtein: '' };
+  const sequence = [];
+  for (let i = 0; i < slots; i += 1) {
+    const pick = candidates
+      .filter(recipe => !used.names.has(recipe.name))
+      .sort((a, b) => privateRecipeVarietyScore(b, profile, used, meal, i) - privateRecipeVarietyScore(a, profile, used, meal, i) || String(a.name).localeCompare(String(b.name)))[0]
+      || candidates[i % Math.max(1, candidates.length)];
+    if (pick) {
+      sequence.push(pick);
+      noteRecipeUse(pick, used);
+    }
+  }
+  return sequence;
+}
+
 function limitedRecipePoolForProfile(payload = {}) {
   const { schema, recipes, swaps } = loadPrivateRecipes();
   const profile = profileFromRecipeRequest(payload);
   const limits = { breakfast: 18, lunch: 24, dinner: 24, snack: 18 };
   const selected = [];
   Object.keys(limits).forEach(meal => {
-    recipes
+    const candidates = recipes
       .filter(recipe => recipe.meal === meal && privateRecipeAllowed(recipe, profile))
-      .sort((a, b) => privateRecipeScore(b, profile) - privateRecipeScore(a, profile) || String(a.name).localeCompare(String(b.name)))
-      .slice(0, limits[meal])
-      .forEach(recipe => selected.push(recipe));
+      .sort((a, b) => privateRecipeScore(b, profile) + recipeCulinaryBoost(b) - (privateRecipeScore(a, profile) + recipeCulinaryBoost(a)) || String(a.name).localeCompare(String(b.name)));
+    const slots = meal === 'snack' ? 14 : 7;
+    const sequence = buildMealSequence(candidates, profile, meal, Math.min(slots, candidates.length));
+    const extra = candidates.filter(recipe => !sequence.some(item => item.name === recipe.name)).slice(0, Math.max(0, limits[meal] - sequence.length));
+    [...sequence, ...extra].slice(0, limits[meal]).forEach(recipe => selected.push(recipe));
   });
   return {
     schema,
@@ -478,17 +1041,69 @@ function cleanList(value) {
 }
 
 function firstRecipesByMeal(payload = {}) {
+  const profile = profileFromRecipeRequest(payload);
   const pool = limitedRecipePoolForProfile(payload).recipes;
   const byMeal = { breakfast: [], lunch: [], dinner: [], snack: [] };
   pool.forEach(recipe => {
     if (byMeal[recipe.meal]) byMeal[recipe.meal].push(recipe);
   });
+  Object.keys(byMeal).forEach(meal => {
+    const slots = meal === 'snack' ? 14 : 7;
+    byMeal[meal] = buildMealSequence(byMeal[meal], profile, meal, slots);
+  });
   return byMeal;
+}
+
+function weeklyRecipesForProfile(payload = {}) {
+  const byMeal = firstRecipesByMeal(payload);
+  const profile = profileFromRecipeRequest(payload);
+  const familyPlan = isFamilyPlanPayload(payload, payload);
+  return { byMeal, days: repairMealPlanRealism(buildWeeklyMealPlan(byMeal, profile, 0), byMeal, profile, 0), weeks: buildMultiWeekMealPlan(byMeal, profile, 4, familyPlan) };
 }
 
 function pickRecipe(list, index) {
   if (!list || !list.length) return null;
   return list[index % list.length];
+}
+
+function mealVarietySummary(recipes = {}) {
+  const all = ['breakfast', 'lunch', 'dinner', 'snack'].flatMap(meal => recipes[meal] || []);
+  const counts = all.reduce((acc, recipe) => {
+    const key = recipeCategory(recipe);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const label = {
+    salad_bowl: 'salad/bowl meals',
+    smoothie: 'smoothie/yogurt-style options',
+    soup_light: 'soups or light dinners',
+    cooked_staple: 'cooked local staple meals',
+    high_protein: 'egg/fish/chicken/protein meals',
+    legume: 'legume meals',
+    yogurt: 'yogurt meals',
+    balanced: 'balanced meals'
+  };
+  return Object.keys(label)
+    .filter(key => counts[key])
+    .map(key => `<span>${escapeHtml(counts[key])} ${escapeHtml(label[key])}</span>`)
+    .join('');
+}
+
+function culinaryDieticianGuidance(profile = {}, recipes = {}) {
+  const all = ['breakfast', 'lunch', 'dinner', 'snack'].flatMap(meal => recipes[meal] || []);
+  const flavourBases = Array.from(new Set(all.map(recipeFlavourFamily).filter(Boolean))).slice(0, 6);
+  const proteins = Array.from(new Set(all.map(recipeProteinFamily).filter(x => x && x !== 'other'))).slice(0, 6);
+  const guidance = [];
+  guidance.push('Meals were selected to rotate texture, flavour base, protein source, and cooking burden so the week does not feel repetitive.');
+  if (flavourBases.length) guidance.push(`Main flavour rotation: ${flavourBases.join(', ')}.`);
+  if (proteins.length) guidance.push(`Protein rotation: ${proteins.join(', ')}.`);
+  if (profile.hasDiabetes) guidance.push('For diabetes support, starches are measured and paired with protein, vegetables, or healthy fats to reduce glucose spikes.');
+  if (profile.hasKidney) guidance.push('For kidney review, high-potassium and high-phosphorus foods are treated cautiously until labs and clinician advice confirm safety.');
+  if (profile.hasIBS) guidance.push('For gut sensitivity, legumes, strong spices, and fermentable triggers are reduced where safer options are available.');
+  if (profile.isPrenatal) guidance.push('For pregnancy or lactation, the engine prioritises food safety, iron/folate support, protein, gentle meals, and appetite practicality.');
+  if (profile.isChild || profile.isFamily) guidance.push('For child or family plans, meals favour familiar foods, scalable portions, school/work practicality, and shared household cooking.');
+  if (profile.budget === 'low') guidance.push('For low-budget plans, the engine favours market-available foods, batch-cooking, eggs, beans where safe, greens, pumpkin, and measured staples.');
+  return guidance;
 }
 
 function serverMacroSummary(profile = {}) {
@@ -510,6 +1125,15 @@ function serverMacroSummary(profile = {}) {
   return { calories, protein, carbs, fat, water: weight ? Math.round(weight * 0.033 * 10) / 10 : 2.2, fibre: calories >= 2000 ? 30 : 25 };
 }
 
+function gaugePosServer(value) {
+  const bmi = Number(value || 0);
+  if (!bmi) return 50;
+  if (bmi < 18.5) return Math.max(4, Math.min(22, 6 + (bmi / 18.5) * 16));
+  if (bmi < 25) return 22 + ((bmi - 18.5) / 6.5) * 26;
+  if (bmi < 30) return 48 + ((bmi - 25) / 5) * 24;
+  return Math.min(96, 72 + ((bmi - 30) / 15) * 24);
+}
+
 function serverClinicalSummaryFromPayload(payload = {}) {
   const profile = payload.profile && typeof payload.profile === 'object' ? payload.profile : payload;
   const conds = cleanList(profile.conds || payload.conds).map(x => x.toLowerCase());
@@ -520,11 +1144,14 @@ function serverClinicalSummaryFromPayload(payload = {}) {
   const warnings = [];
   const blockers = [];
   if (!String(profile.allergies || '').trim()) warnings.push('Food allergy/intolerance field is blank. Confirm before final approval.');
+  if (String(profile.redFlags || '').trim()) warnings.push('Red-flag symptoms or urgent concerns were submitted. Review before release.');
+  if (String(profile.clinicianStatus || '').includes('not_under_doctor') && (conds.includes('kidney') || conds.includes('diabetes') || conds.includes('hypertension'))) warnings.push('Specialist condition selected without current doctor/clinic follow-up.');
   if (conds.includes('kidney') && !(profile.labs && (profile.labs.egfr || profile.labs.creatinine))) blockers.push('Kidney condition selected without kidney lab values.');
   if (conds.includes('diabetes') && !(profile.labs && (profile.labs.hba1c || profile.labs.glucose))) blockers.push('Diabetes selected without HbA1c or fasting glucose.');
   if ((conds.includes('hypertension') || String(profile.goal || '').includes('hypertension')) && !(profile.labs && profile.labs.sbp && profile.labs.dbp)) warnings.push('Hypertension selected without current BP readings.');
   if ((String(profile.goal || '').includes('prenatal') || String(profile.lifeStage || '').includes('pregnant')) && !(profile.prenatal && profile.prenatal.trimester)) blockers.push('Pregnancy selected without trimester/status details.');
   const status = blockers.length ? 'review' : warnings.length ? 'caution' : 'safe';
+  const specialistItems = specialistClinicalItems(profile, { conditions: conds });
   return {
     bmi,
     category: cat,
@@ -541,8 +1168,15 @@ function serverClinicalSummaryFromPayload(payload = {}) {
     fat: macros.fat,
     medicationNote: profile.meds || '',
     diagnosis: profile.diagnosis || '',
+    diagnosisDate: profile.diagnosisDate || '',
     symptoms: profile.symptoms || '',
+    redFlags: profile.redFlags || '',
     allergies: profile.allergies || '',
+    foodDislikes: profile.foodDislikes || '',
+    culturalFoods: profile.culturalFoods || '',
+    monitoring: profile.monitoring || '',
+    clinicianStatus: profile.clinicianStatus || '',
+    specialStatus: profile.specialStatus || '',
     customerSource: profile.customerSource || '',
     referralCode: profile.referralCode || '',
     customerType: profile.customerType || '',
@@ -551,7 +1185,11 @@ function serverClinicalSummaryFromPayload(payload = {}) {
     safetyDecision: {
       status,
       label: status === 'review' ? 'Review required before approval' : status === 'caution' ? 'Caution review recommended' : 'Ready for standard review',
-      summary: 'Backend-generated safety summary from submitted customer answers.',
+      summary: status === 'safe'
+        ? 'This plan is suitable for standard nutrition follow-up based on the information submitted.'
+        : status === 'caution'
+          ? 'This plan can be used with follow-up, but some submitted details should be confirmed during review.'
+          : 'This plan needs professional review before being treated as final guidance.',
       caution: warnings,
       review: blockers,
       missing
@@ -576,42 +1214,1184 @@ function serverClinicalSummaryFromPayload(payload = {}) {
       checklist: [],
       stats: {}
     },
-    clinicalTargets: [],
-    conditionChapters: conds.map(c => ({ title: `${c.charAt(0).toUpperCase()}${c.slice(1)} Support Chapter`, priority: 'review', review: 'Apply customer-specific clinical judgment before final approval.' }))
+    clinicalTargets: specialistItems.flatMap(item => item.targets.map(([target, guidance]) => ({
+      condition: item.title,
+      target,
+      guidance
+    }))),
+    conditionChapters: specialistItems.map(item => ({
+      title: item.title,
+      priority: 'patient-visible',
+      review: item.chapter
+    }))
   };
 }
 
-function recipeCardHtml(recipe) {
+function mealSlotLabel(slotKey) {
+  const labels = {
+    breakfast: 'Breakfast - 7:00am',
+    snack1: 'Mid-morning - 10:30am',
+    lunch: 'Lunch - 1:00pm',
+    snack2: 'Afternoon snack - 4:00pm',
+    dinner: 'Dinner - 6:30pm'
+  };
+  return labels[slotKey] || 'Meal';
+}
+
+function recipeProteinLabel(recipe = {}) {
+  const protein = recipeProteinFamily(recipe);
+  const labels = {
+    egg: 'Egg protein',
+    fish: 'Fish protein',
+    chicken: 'Chicken protein',
+    legume: 'Plant protein',
+    dairy: 'Dairy protein',
+    nuts: 'Nut/seed protein',
+    meat: 'Animal protein',
+    mixed: 'Mixed protein'
+  };
+  return labels[protein] || 'Balanced';
+}
+
+function recipeEquipmentLabel(recipe = {}) {
+  const text = [recipe.method, recipe.culinaryStyle, recipe.name].filter(Boolean).join(' ').toLowerCase();
+  if (text.includes('blend') || isSmoothieLike(recipe)) return 'Blender';
+  if (text.includes('oven') || text.includes('bake')) return 'Oven';
+  if (text.includes('grill')) return 'Grill/pan';
+  if (text.includes('steam')) return 'Steamer/pot';
+  if (text.includes('salad') || recipeCategory(recipe) === 'salad_bowl') return 'Knife/bowl';
+  return 'Pot/pan';
+}
+
+function recipeMealReason(recipe = {}) {
+  const category = recipeCategory(recipe);
+  const reasons = {
+    cooked_staple: 'This gives a real cooked meal base while keeping starch measured and balanced with protein and vegetables.',
+    salad_bowl: 'This adds freshness, fibre, colour, and crunch without making the whole day heavy.',
+    high_protein: 'This supports fullness, muscle protection, and steadier appetite when portions are controlled.',
+    legume: 'This adds affordable protein and fibre, with portion adjustment if digestion or kidney review is needed.',
+    soup_light: 'This gives a lighter evening option with fluid, vegetables, and protein without relying on snacks.',
+    smoothie: 'This is kept to breakfast or snack use only, not lunch or dinner replacement.',
+    yogurt: 'This supports a simple protein-rich breakfast or snack where dairy is tolerated.',
+    fresh: 'This keeps the day practical with fruit or vegetables in measured portions.'
+  };
+  return recipe.why || reasons[category] || 'This meal was selected to balance taste, practicality, budget, and nutrition targets.';
+}
+
+function recipeCardHtml(recipe, slotKey = '') {
   if (!recipe) return '';
   const ingredients = (recipe.ingredients || []).join(', ');
-  const swaps = (recipe.substitutions || []).slice(0, 2).join(' | ');
-  const taste = (recipe.tasteProfile || []).join(', ');
+  const swapList = (recipe.substitutions || [])
+    .filter(item => isEggRecipe(recipe) || !/\begg\b|\beggs\b/i.test(String(item || '')))
+    .slice(0, 2);
+  const swaps = swapList.join(' | ');
+  const method = recipe.method || 'Prepare simply with minimal oil, sugar, and salt.';
+  const portion = recipe.portion || 'Use a balanced plate: vegetables first, then protein, then measured starch if included.';
+  const chips = [
+    recipe.time ? `Time: ${recipe.time} min` : '',
+    recipe.cost ? `Cost: ${recipe.cost}` : '',
+    `Protein: ${recipeProteinLabel(recipe)}`,
+    `Equipment: ${recipeEquipmentLabel(recipe)}`,
+    recipe.batchCook ? 'Batch-cook friendly' : ''
+  ].filter(Boolean);
+  const tasteNotes = [
+    recipe.tasteProfile ? `Taste: ${recipe.tasteProfile}` : '',
+    recipe.allergens && recipe.allergens.length ? `Allergens: ${recipe.allergens.join(', ')}` : '',
+    recipe.clinicalNotes ? `Note: ${String(recipe.clinicalNotes).split(/[.;]/)[0]}` : ''
+  ].filter(Boolean).join(' | ');
   return `<div class="meal-card">
-    <div class="meal-time">${escapeHtml(recipe.meal || 'meal')}</div>
-    <div class="meal-name">${escapeHtml(recipe.name || 'Meal')}</div>
+    <div class="meal-head">
+      <div>
+        <div class="meal-time">${escapeHtml(mealSlotLabel(slotKey) || recipe.meal || 'meal')}</div>
+        <div class="meal-name">${escapeHtml(recipe.name || 'Meal')}</div>
+      </div>
+    </div>
     <div class="meal-chips">
-      ${recipe.time ? `<span>${escapeHtml(recipe.time)} min</span>` : ''}
-      ${recipe.cost ? `<span>${escapeHtml(recipe.cost)}</span>` : ''}
-      ${recipe.reviewStatus ? `<span>${escapeHtml(recipe.reviewStatus)}</span>` : ''}
+      ${chips.map(chip => `<span>${escapeHtml(chip)}</span>`).join('')}
     </div>
     <div class="meal-grid">
       <div class="meal-box"><strong>Ingredients</strong><p>${escapeHtml(ingredients || 'Use listed foods in measured portions.')}</p></div>
-      <div class="meal-box"><strong>Preparation</strong><p>${escapeHtml(recipe.method || 'Prepare simply with minimal oil, sugar, and salt.')}</p></div>
-      <div class="meal-box"><strong>Portion</strong><p>${escapeHtml(recipe.portion || 'Use a balanced plate: vegetables first, then protein, then measured starch if included.')}</p></div>
-      <div class="meal-box"><strong>Food reason</strong><p>${escapeHtml(recipe.why || 'Selected to support the customer profile while keeping the meal practical.')}</p></div>
+      <div class="meal-box"><strong>Preparation</strong><p>${escapeHtml(method)}</p></div>
+      <div class="meal-box"><strong>Portion guide</strong><p>${escapeHtml(portion)}</p></div>
+      <div class="meal-box"><strong>Smart swaps</strong><p>${escapeHtml(swaps || 'Swap with a similar protein, vegetable, or measured staple from the plan if needed.')}</p></div>
     </div>
-    ${taste ? `<div class="meal-note"><strong>Taste:</strong> ${escapeHtml(taste)}</div>` : ''}
-    ${swaps ? `<div class="meal-note"><strong>Smart swaps:</strong> ${escapeHtml(swaps)}</div>` : ''}
+    <div class="meal-notes">
+      <div class="meal-note"><strong>Food reason</strong><br>${escapeHtml(recipeMealReason(recipe))}</div>
+      ${tasteNotes ? `<div class="meal-note"><strong>Taste and practical notes</strong><br>${escapeHtml(tasteNotes)}</div>` : ''}
+    </div>
   </div>`;
+}
+
+function conditionDisplayName(value) {
+  const raw = String(value || '').trim();
+  const key = raw.toLowerCase();
+  const names = {
+    pcos: 'PMOS',
+    diabetes: 'Diabetes',
+    hypertension: 'Hypertension',
+    cholesterol: 'Cholesterol / LDL support',
+    kidney: 'Kidney review',
+    gout: 'Gout',
+    thyroid: 'Thyroid support',
+    anemia: 'Anaemia',
+    ibs: 'IBS / gut-sensitive',
+    prenatal: 'Pregnancy / prenatal'
+  };
+  return names[key] || raw;
+}
+
+function isFamilyPlanPayload(payload = {}, profile = {}) {
+  const text = [
+    payload.packageName,
+    payload.orderType,
+    profile.plantype,
+    profile.goal,
+    profile.familyData && JSON.stringify(profile.familyData)
+  ].filter(Boolean).join(' ').toLowerCase();
+  return text.includes('family') || text.includes('household') || Boolean(profile.familyData && Object.keys(profile.familyData).length);
+}
+
+function splitFamilyField(value) {
+  return String(value || '')
+    .split(/[;,|]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function familyMemberGroup(ageOrLabel) {
+  const n = Number.parseInt(ageOrLabel, 10);
+  if (Number.isFinite(n)) {
+    if (n < 5) return 'Toddler / young child';
+    if (n < 13) return 'Child';
+    if (n < 18) return 'Teen';
+    if (n >= 60) return 'Older adult';
+    return 'Adult';
+  }
+  const text = String(ageOrLabel || '').toLowerCase();
+  if (/toddler|baby|young child/.test(text)) return 'Toddler / young child';
+  if (/child|kid|school/.test(text)) return 'Child';
+  if (/teen|adolescent/.test(text)) return 'Teen';
+  if (/grand|elder|older|senior/.test(text)) return 'Older adult';
+  if (/pregnan|mother|father|adult|parent/.test(text)) return 'Adult';
+  return 'Family member';
+}
+
+function memberConditionText(member = {}, householdConditions = '') {
+  const text = [
+    member.condition,
+    member.conditions,
+    member.diagnosis,
+    member.health,
+    member.notes,
+    member.allergies
+  ].filter(Boolean).join('; ');
+  return text || householdConditions || '';
+}
+
+function memberPortionGuide(group, conditions = '') {
+  const cond = String(conditions || '').toLowerCase();
+  const base = group === 'Toddler / young child'
+    ? '1/3 to 1/2 adult starch, soft child-hand protein, finely prepared vegetables, fruit in small pieces.'
+    : group === 'Child'
+      ? '1/2 to 2/3 adult starch, child-palm protein, vegetables prepared simply, growth snack if appetite is good.'
+      : group === 'Teen'
+        ? 'Adult-style plate; increase protein/starch for sport, growth, school hunger, or underweight.'
+        : group === 'Older adult'
+          ? '1/2 to 3/4 cup starch, palm protein, soft vegetables, hydration, and protein at each main meal.'
+          : '1/2 to 1 cup starch, 1 palm protein, 2 cups vegetables, and 1 tablespoon sauce/oil/groundnuts where suitable.';
+  const extras = [];
+  if (/diabetes|glucose|hba1c/.test(cond)) extras.push('keep starch measured, avoid sweet drinks, pair carbs with protein and vegetables');
+  if (/hypertension|blood pressure|bp/.test(cond)) extras.push('cook low-salt; use garlic, onion, tomato, lemon, ginger, and herbs for flavour');
+  if (/kidney|egfr|creatinine/.test(cond)) extras.push('needs kidney-lab review before high-protein, potassium, phosphate, or salt changes');
+  if (/pregnan|trimester|lactation|breastfeeding/.test(cond)) extras.push('add safe protein, iron/folate foods, calcium foods, hydration, and food-safety care');
+  if (/underweight|weight gain|poor appetite/.test(cond)) extras.push('add nourishing snacks, yogurt/groundnut/avocado where safe, and do not over-restrict starch');
+  if (/ibs|gut|bloat|diarrhoea|constipation/.test(cond)) extras.push('adjust beans, cabbage, milk, onions, and fibre gradually based on symptoms');
+  return extras.length ? `${base} Special adjustment: ${extras.join('; ')}.` : base;
+}
+
+function memberNutritionFocus(group, conditions = '') {
+  const cond = String(conditions || '').toLowerCase();
+  const focus = [];
+  if (group === 'Toddler / young child' || group === 'Child') focus.push('growth, school energy, iron, calcium, zinc, vitamin A');
+  if (group === 'Teen') focus.push('growth, school performance, protein, iron, calcium, healthy snacks');
+  if (group === 'Older adult') focus.push('muscle preservation, hydration, fibre, softer textures, fall-risk nutrition');
+  if (group === 'Adult' || group === 'Family member') focus.push('energy, portion control, metabolic health, realistic cooking');
+  if (/diabetes|glucose|hba1c/.test(cond)) focus.push('glucose control');
+  if (/hypertension|blood pressure|bp/.test(cond)) focus.push('blood-pressure support');
+  if (/kidney|egfr|creatinine/.test(cond)) focus.push('kidney review');
+  if (/pregnan|trimester|lactation|breastfeeding/.test(cond)) focus.push('pregnancy/lactation safety');
+  if (/ibs|gut|bloat/.test(cond)) focus.push('gut tolerance');
+  return Array.from(new Set(focus)).join(', ');
+}
+
+function familyMemberProfiles(payload = {}, profile = {}) {
+  const fd = profile.familyData || payload.familyData || {};
+  const count = Math.max(2, Number.parseInt(fd.count || profile.familyCount || 4, 10) || 4);
+  const householdConditions = String(fd.conditions || profile.familyConditions || profile.conds || '').trim();
+  const rawMembers = Array.isArray(fd.members) ? fd.members
+    : Array.isArray(profile.familyMembers) ? profile.familyMembers
+      : [];
+  if (rawMembers.length) {
+    return rawMembers.slice(0, 12).map((member, index) => {
+      const label = member.name || member.label || member.role || `Member ${index + 1}`;
+      const age = member.age || member.years || '';
+      const group = familyMemberGroup(age || label);
+      const conditions = memberConditionText(member, householdConditions);
+      return { label, age, group, conditions, allergies: member.allergies || '', activity: member.activity || '', appetite: member.appetite || '', notes: member.notes || '' };
+    });
+  }
+  const names = splitFamilyField(fd.names || fd.memberNames || profile.familyNames);
+  const ages = splitFamilyField(fd.ages || profile.familyAges);
+  const conditionParts = splitFamilyField(fd.memberConditions || fd.conditionsByMember || '');
+  return Array.from({ length: Math.min(count, 12) }, (_, index) => {
+    const label = names[index] || `Member ${index + 1}`;
+    const age = ages[index] || '';
+    const fallbackLabel = age || label;
+    const group = familyMemberGroup(fallbackLabel);
+    const conditions = conditionParts[index] || householdConditions;
+    return { label, age, group, conditions, allergies: '', activity: '', appetite: '', notes: '' };
+  });
+}
+
+function householdConflictCards(members = []) {
+  const all = members.map(member => `${member.group} ${member.conditions || ''}`).join(' ').toLowerCase();
+  const cards = [];
+  if (/diabetes|glucose|hba1c/.test(all) && /child|teen|underweight|weight gain|poor appetite/.test(all)) {
+    cards.push(['Diabetes + child/growth needs', 'Use the same cooked meal. The diabetes plate gets measured starch and no sweet drink; the child/teen may receive a larger starch portion or extra nourishing snack.']);
+  }
+  if (/kidney|egfr|creatinine/.test(all)) {
+    cards.push(['Kidney conflict rule', 'Do not place the whole family on kidney restrictions. Only the affected member needs kidney-lab-guided protein, potassium, phosphate, and salt review.']);
+  }
+  if (/pregnan|trimester|lactation/.test(all) && /weight loss|obese|overweight|diabetes/.test(all)) {
+    cards.push(['Pregnancy + weight/metabolic goals', 'Use shared healthy meals, but pregnancy portions must protect protein, iron, folate, calcium, hydration, and safe weight gain rather than aggressive restriction.']);
+  }
+  if (/hypertension|blood pressure|bp/.test(all)) {
+    cards.push(['Low-salt household advantage', 'Low-salt cooking can benefit the whole household, but children and active members still need adequate food volume and energy.']);
+  }
+  if (!cards.length) cards.push(['No major conflict captured', 'Use one shared meal base, then adjust portions by age, appetite, activity, allergies, and any conditions confirmed during follow-up.']);
+  return cards;
+}
+
+function familyPlanSectionHtml(payload = {}, profile = {}) {
+  const fd = profile.familyData || payload.familyData || {};
+  if (!isFamilyPlanPayload(payload, profile)) return '';
+  const count = Math.max(2, Number.parseInt(fd.count || profile.familyCount || 4, 10) || 4);
+  const children = Math.max(0, Number.parseInt(fd.children || 0, 10) || 0);
+  const adultCount = Math.max(0, count - children);
+  const members = familyMemberProfiles(payload, profile);
+  const memberRows = members.map((member, i) => {
+    const details = [
+      member.age ? `${member.age} years` : '',
+      member.activity ? `Activity: ${member.activity}` : '',
+      member.appetite ? `Appetite: ${member.appetite}` : ''
+    ].filter(Boolean).join(' | ') || 'Details not captured';
+    return `<tr>
+      <td>${escapeHtml(i + 1)}</td>
+      <td>${escapeHtml(member.label)}</td>
+      <td>${escapeHtml(details)}</td>
+      <td>${escapeHtml(member.group)}</td>
+      <td>${escapeHtml(member.conditions || 'No individual condition captured')}</td>
+      <td>${escapeHtml(memberPortionGuide(member.group, member.conditions))}</td>
+      <td>${escapeHtml(memberNutritionFocus(member.group, member.conditions))}</td>
+    </tr>`;
+  }).join('');
+  const weeklyProtein = Math.max(18, count * 5);
+  const vegCups = count * 14;
+  const fruitSnacks = Math.max(7, count * 5);
+  const stapleServings = Math.max(14, count * 7);
+  const rotation = [
+    ['Week 1', 'Foundation shared menu', 'Use the 7-day menu below. Serve one shared meal base, then apply the member-by-member plate adjustments.'],
+    ['Week 2', 'Protein rotation', 'Rotate beans/cowpeas, fish or mukene, chicken or lean meat, yogurt, groundnuts, and eggs only where suitable.'],
+    ['Week 3', 'Budget and batch-cook week', 'Batch-cook beans, greens, soup/stew base, and measured staples. Use safe leftovers for work and school lunches.'],
+    ['Week 4', 'Taste and acceptance week', 'Keep meals the family accepted, replace bland/repetitive meals, and update portions using appetite, symptoms, BP/glucose, school/work routine, and cost.'],
+    ['Days 31 to 60', 'Continuation rotation', 'Repeat the best two weeks, add new vegetables/proteins, and tighten member-specific portions after follow-up review.']
+  ].map(row => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(row[0])}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(row[1])}</td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(row[2])}</td></tr>`).join('');
+  const sharedPlateRows = [
+    ['Shared cooking base', 'Cook one main meal: protein or legumes, vegetables, measured staple, and sauce separately where possible.'],
+    ['Adult plate', '2 cups vegetables, 1 palm protein, 1/2 to 1 cup starch, 1 tablespoon sauce/oil/groundnut paste where suitable.'],
+    ['Child plate', '1/2 to 2/3 adult starch, child-palm protein, vegetables in accepted texture, and a school snack if appetite or growth needs support.'],
+    ['Diabetes adjustment', 'Measure starch, increase vegetables, avoid sweet drinks, keep fruit whole and portioned, and pair carbs with protein.'],
+    ['Hypertension adjustment', 'Use low-salt cooking; flavour with tomato, onion, garlic, ginger, lemon, herbs, and spices.'],
+    ['Pregnancy/lactation adjustment', 'Add safe protein, iron/folate foods, calcium foods, fluids, and avoid unsafe foods.'],
+    ['Kidney-review adjustment', 'Do not apply kidney restrictions to everyone. The affected member needs lab-guided review before major changes.']
+  ].map(row => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(row[0])}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(row[1])}</td></tr>`).join('');
+  const conflictCards = householdConflictCards(members).map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('');
+  const lunchCards = [
+    ['School snack box', 'Fruit, plain yogurt where safe, roasted groundnuts if allowed, boiled egg only where suitable, bean/vegetable bowl, or safe leftovers.'],
+    ['Adult work lunch', 'Packed bowl with measured starch, protein, vegetables, and sauce separately. Avoid relying on soda, fried snacks, or very salty takeaway.'],
+    ['Safe leftovers', 'Cool quickly, cover, refrigerate, reheat thoroughly, and avoid keeping cooked food at room temperature for long.'],
+    ['No-soda drinks', 'Water, unsweetened hibiscus, plain tea, infused water, or diluted unsweetened passion/lemon where appropriate.']
+  ].map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('');
+  const cookingSchedule = [
+    ['Sunday', 'Plan proteins, soak/cook beans or cowpeas, buy vegetables, and prepare one soup/stew base.'],
+    ['Monday', 'Cook greens and staple portions; pack leftovers safely for school/work.'],
+    ['Wednesday', 'Refresh vegetables, cook fish/chicken or mukene where safe, and prepare salad/bowl bases dry.'],
+    ['Friday', 'Use leftovers creatively: soup, bowl, stew, or vegetable mix. Review what the family rejected.'],
+    ['Weekend', 'Choose two meals to repeat and one meal to replace next week.']
+  ].map(([day, text]) => `<div class="phase"><strong>${escapeHtml(day)}</strong><p>${escapeHtml(text)}</p></div>`).join('');
+  const budgetCards = [
+    ['Low-cost protein basket', 'Beans, cowpeas, peas, mukene where safe, groundnuts in small portions, yogurt where affordable, and eggs only where clinically suitable.'],
+    ['Seasonal vegetable rule', 'Buy what is fresh and affordable: cabbage, dodo, nakati, sukuma, pumpkin, carrots, tomatoes, eggplant, or cucumber.'],
+    ['Bulk cooking rule', 'Cook legumes and soup bases in batches, then change flavour using herbs, tomatoes, garlic, ginger, lemon, and vegetables.'],
+    ['When money is tight', 'Prioritise protein, vegetables, and measured staples before snacks, sweet drinks, fried foods, or expensive extras.']
+  ].map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('');
+  const trackerRows = [
+    ['Taste', 'Which meals were enjoyed, rejected, bland, too spicy, or too hard to prepare?'],
+    ['Cost', 'Which meals were affordable, expensive, or difficult to shop for?'],
+    ['Symptoms', 'Any bloating, reflux, constipation, diarrhoea, headaches, glucose/BP concerns, or allergy symptoms?'],
+    ['Repetition', 'Which foods repeated too much, especially eggs, smoothies, beans, or one staple?'],
+    ['Measurements', 'Weight, waist, glucose, BP, child appetite/growth, pregnancy symptoms, or other relevant markers.']
+  ].map(row => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(row[0])}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(row[1])}</td></tr>`).join('');
+  return `<div class="sec"><div class="sh"><div class="si">FM</div><div class="st">Household Personalisation Plan</div></div>
+    <div class="grid">
+      <div class="box"><strong>Family size</strong><br>${escapeHtml(count)} people (${escapeHtml(adultCount)} adult/teen estimate, ${escapeHtml(children)} child estimate)</div>
+      <div class="box"><strong>Ages captured</strong><br>${escapeHtml(fd.ages || 'Not captured')}</div>
+      <div class="box"><strong>Family goal</strong><br>${escapeHtml(fd.goal || profile.goal || 'Shared healthy eating')}</div>
+      <div class="box"><strong>Budget range</strong><br>${escapeHtml(fd.budget || profile.budget || 'Not captured')}</div>
+      <div class="box"><strong>Family conditions</strong><br>${escapeHtml(fd.conditions || 'None captured')}</div>
+      <div class="box"><strong>Allergies/intolerances</strong><br>${escapeHtml(fd.allergies || profile.allergies || 'Not captured')}</div>
+    </div>
+    <div class="week-card"><div class="day-title">Household Personalisation Matrix</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">#</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Member</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Details</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Group</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Condition/allergy focus</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Plate adjustment</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Nutrition focus</th></tr></thead><tbody>${memberRows}</tbody></table></div>
+    <div class="week-card"><div class="day-title">Shared Meal, Different Plates</div><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${sharedPlateRows}</tbody></table></div>
+    <div class="support-grid">${conflictCards}</div>
+    <div class="support-grid" style="margin-top:8px">${lunchCards}</div>
+    <div class="phase-grid" style="margin-top:8px">${cookingSchedule}</div>
+    <div class="week-card"><div class="day-title">30-day household rotation</div><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${rotation}</tbody></table></div>
+    <div class="support-grid">${budgetCards}</div>
+    <div class="week-card" style="margin-top:8px"><div class="day-title">Family Taste and Acceptance Tracker</div><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${trackerRows}</tbody></table></div>
+    <div class="note"><strong>Shopping scale for this household:</strong> plan roughly ${escapeHtml(weeklyProtein)} palm-size protein portions per week, ${escapeHtml(vegCups)} cups of vegetables across the week, ${escapeHtml(stapleServings)} measured staple servings, and about ${escapeHtml(fruitSnacks)} fruit/snack portions for school or work. Adjust down for toddlers and up for active teens, pregnancy, sport, poor appetite, or weight gain.</div>
+    <div class="note" style="margin-top:8px"><strong>Caregiver guidance:</strong> do not cook separate meals unless medically necessary. Cook the same base meal, keep salt/sugar/oil controlled at the pot level, then personalise each plate using the matrix above.</div>
+  </div>`;
+}
+
+function shortDisplay(value, fallback = 'Not captured') {
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  return text || fallback;
+}
+
+function listDisplay(value, fallback = 'None captured') {
+  const list = cleanList(value);
+  return list.length ? list.map(conditionDisplayName).join(', ') : fallback;
+}
+
+function labSummaryRows(labs = {}) {
+  if (!labs || typeof labs !== 'object') return [];
+  const labels = {
+    glucose: 'Glucose',
+    hba1c: 'HbA1c',
+    cholesterol: 'Total cholesterol',
+    ldl: 'LDL',
+    hdl: 'HDL',
+    trig: 'Triglycerides',
+    haemoglobin: 'Haemoglobin',
+    ferritin: 'Ferritin',
+    vitd: 'Vitamin D',
+    b12: 'Vitamin B12',
+    calcium: 'Calcium',
+    potassium: 'Potassium',
+    uricacid: 'Uric acid',
+    tsh: 'TSH',
+    egfr: 'eGFR',
+    creatinine: 'Creatinine',
+    phosphate: 'Phosphate / phosphorus',
+    sodium: 'Sodium',
+    albumin: 'Albumin',
+    folate: 'Folate',
+    clinician_comment: 'Clinician lab comment',
+    sbp: 'Systolic BP',
+    dbp: 'Diastolic BP',
+    other: 'Other labs'
+  };
+  return Object.keys(labels)
+    .map(key => [labels[key], labs[key]])
+    .filter(([, value]) => String(value || '').trim())
+    .slice(0, 16);
+}
+
+function compactModuleSummary(profile = {}) {
+  const rows = [];
+  if (profile.familyData && Object.keys(profile.familyData).length) rows.push(['Family details', `Family/household data captured for ${shortDisplay(profile.familyData.count || profile.familyCount, 'multiple')} member(s).`]);
+  if (profile.sport && Object.keys(profile.sport).length) rows.push(['Sports nutrition', 'Training/performance details captured.']);
+  if (profile.mental && Object.keys(profile.mental).length) rows.push(['Mood and appetite', 'Mental health/eating pattern details captured.']);
+  if (profile.vitality && Object.keys(profile.vitality).length) rows.push(['Vitality', 'Energy, sleep, stress, or fatigue details captured.']);
+  if (profile.prenatal && Object.keys(profile.prenatal).length) rows.push(['Pregnancy/lactation', 'Pregnancy, lactation, or trimester details captured.']);
+  if (profile.cycleData && Object.keys(profile.cycleData).length) rows.push(['Cycle nutrition', 'Cycle phase and menstrual pattern details captured.']);
+  if (profile.intimate && Object.keys(profile.intimate).length) rows.push(['Adult wellness', 'Adult wellness details captured privately.']);
+  return rows;
+}
+
+function assessmentEvidenceSection(payload = {}, profile = {}) {
+  const labs = labSummaryRows(profile.labs || {});
+  const modules = compactModuleSummary(profile);
+  const rows = [
+    ['Age / sex', [profile.age ? `${profile.age} years` : '', profile.sex].filter(Boolean).join(' / ')],
+    ['Height / weight', [profile.height ? `${profile.height} cm` : '', profile.weight ? `${profile.weight} kg` : ''].filter(Boolean).join(' / ')],
+    ['BMI category', [payload.bmi || profile.bmi, profile.cat].filter(Boolean).join(' / ')],
+    ['Activity level', profile.activity],
+    ['Primary goal', profile.goal],
+    ['Plan type', profile.plantype],
+    ['Health conditions', listDisplay(profile.conds || payload.conds)],
+    ['Diagnosis details', profile.diagnosis],
+    ['Date diagnosed / duration', profile.diagnosisDate],
+    ['Symptoms noted', profile.symptoms],
+    ['Red-flag symptoms / urgent concerns', profile.redFlags],
+    ['Allergies/intolerances', profile.allergies],
+    ['Food dislikes / foods avoided', profile.foodDislikes],
+    ['Cultural / usual foods', profile.culturalFoods],
+    ['Medication notes', profile.meds],
+    ['Home monitoring readings', profile.monitoring],
+    ['Clinician follow-up status', profile.clinicianStatus],
+    ['Special status', profile.specialStatus],
+    ['Budget / cooking setup', [profile.budget, profile.cooking].filter(Boolean).join(' / ')],
+    ['Customer source', [profile.customerSource, profile.referralCode, profile.customerType].filter(Boolean).join(' / ')]
+  ].filter(([, value]) => String(value || '').trim());
+  const labHtml = labs.length
+    ? `<div class="mini-table">${labs.map(([label, value]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join('')}</div>`
+    : `<div class="note">No lab values were submitted. The plan uses nutrition-screening logic and should be refined when glucose, BP, lipid, kidney, iron, or pregnancy-related results are available.</div>`;
+  const moduleHtml = modules.length
+    ? `<div class="mini-table">${modules.map(([label, value]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join('')}</div>`
+    : `<div class="note">No advanced module details were submitted beyond the main assessment.</div>`;
+  return `<div class="sec"><div class="sh"><div class="si">AU</div><div><div class="st">Assessment Used to Build This Plan</div><div class="subtle">These are the submitted details used to personalise this plan.</div></div></div>
+    <div class="grid">${rows.map(([label, value]) => `<div class="box"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join('')}</div>
+    <div class="two-col">
+      <div><h3>Submitted lab / clinical values</h3>${labHtml}</div>
+      <div><h3>Extra personalisation modules</h3>${moduleHtml}</div>
+    </div>
+  </div>`;
+}
+
+function bmiMeaningSection(payload = {}, profile = {}) {
+  const rawBmi = Number(payload.bmi || profile.bmi || 0);
+  const category = shortDisplay(profile.cat || payload.cat || payload.category, 'Not captured');
+  const height = Number(profile.height || 0);
+  const weight = Number(profile.weight || profile.currentWeight || 0);
+  const healthyWeight = height ? Math.round(24.9 * Math.pow(height / 100, 2) * 10) / 10 : 0;
+  let meaning = 'BMI is one screening tool. It does not replace waist measurements, body composition, lab results, symptoms, medication review, or clinical judgement.';
+  if (rawBmi && rawBmi < 18.5) meaning = 'Your BMI is below the usual healthy range, so this plan prioritises steady energy, adequate protein, micronutrient density, and appetite-friendly meals.';
+  if (rawBmi >= 18.5 && rawBmi < 25) meaning = 'Your BMI is within the usual healthy range, so this plan focuses on maintaining energy, metabolic health, digestion, and long-term protective eating patterns.';
+  if (rawBmi >= 25 && rawBmi < 30) meaning = 'Your BMI is above the usual healthy range, so this plan uses measured starch portions, higher-fibre meals, protein at each main meal, and sustainable energy control.';
+  if (rawBmi >= 30) meaning = 'Your BMI is in the obesity range, so this plan supports gradual fat loss, appetite control, glucose and blood-pressure risk reduction, and muscle preservation.';
+  const targetLine = healthyWeight && weight && weight > healthyWeight
+    ? `A healthy long-term reference weight for your height may be around ${healthyWeight} kg, but the first target should be gradual progress, not rapid weight loss.`
+    : 'The best target is progress in energy, measurements, symptoms, appetite control, and clinical markers, not only scale weight.';
+  return `<div class="sec"><div class="sh"><div class="si">BMI</div><div><div class="st">Your BMI Assessment and Clinical Meaning</div><div class="subtle">A simple screening summary to help interpret the plan safely.</div></div></div>
+    <div class="gauge"><div class="gpin" style="left:${escapeHtml(gaugePosServer(rawBmi))}%"></div></div>
+    <div class="glbl"><span>Underweight below 18.5</span><span>Normal 18.5 to 25</span><span>Overweight 25 to 30</span><span>Obese 30 and above</span></div>
+    <div class="bmi-exp"><strong>BMI ${rawBmi ? escapeHtml(rawBmi) : 'not captured'}: ${escapeHtml(category)}.</strong> ${escapeHtml(meaning)} ${escapeHtml(targetLine)}</div>
+  </div>`;
+}
+
+function projectedOutcomesSection(profile = {}, macros = {}) {
+  const goal = String(profile.goal || '').toLowerCase();
+  const weight = Number(profile.weight || profile.currentWeight || 0);
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const outcome = goal.includes('loss') || goal.includes('weight')
+    ? 'A realistic fat-loss pace is usually about 0.25 to 0.75 kg per week when portions, protein, sleep, and activity are consistent.'
+    : goal.includes('gain')
+      ? 'A realistic weight-gain pace is gradual, with emphasis on appetite, strength, protein, and nutrient-dense snacks rather than sugary high-calorie foods.'
+      : 'The most important outcomes are better energy, steadier appetite, improved digestion, practical eating rhythm, and stronger long-term food choices.';
+  const weightNote = weight ? `Current submitted weight: ${weight} kg. Use the same scale, same time of day, once weekly.` : 'Track progress using measurements, appetite, symptoms, energy, sleep, and clinical markers where available.';
+  const measures = ['weekly weight or waist trend', 'hunger and cravings', 'energy and sleep', 'digestion and stool pattern', 'meal satisfaction and cost'];
+  if (condText.includes('diabetes') || condText.includes('glucose') || condText.includes('hba1c')) measures.push('fasting and post-meal glucose if available');
+  if (condText.includes('hypertension') || condText.includes('blood pressure') || condText.includes('sbp')) measures.push('home blood pressure if available');
+  if (condText.includes('kidney') || condText.includes('egfr')) measures.push('kidney labs before major protein or potassium changes');
+  return `<div class="sec"><div class="sh"><div class="si y">TIME</div><div><div class="st">Your Projected Outcomes Over Time</div><div class="subtle">Expected progress should be realistic and measurable.</div></div></div>
+    <div class="phase-grid">
+      <div class="phase"><strong>Weeks 1 to 2</strong><p>Foundation phase: build meal rhythm, water routine, protein consistency, portion awareness, and record meals that feel unrealistic.</p></div>
+      <div class="phase"><strong>Weeks 3 to 4</strong><p>Adjustment phase: review hunger, digestion, taste, cost, energy, cravings, repeated foods, and replace weak meals.</p></div>
+      <div class="phase"><strong>Month 2</strong><p>Progress phase: increase variety, improve shopping habits, add realistic movement, and refine portions using measurements.</p></div>
+      <div class="phase"><strong>Month 3</strong><p>Maintenance phase: keep the best meals, update labs if needed, and turn the plan into a repeatable lifestyle pattern.</p></div>
+    </div>
+    <div class="note"><strong>Expected direction:</strong> ${escapeHtml(outcome)} ${escapeHtml(weightNote)} Daily starting target: ${escapeHtml(macros.calories)} kcal, ${escapeHtml(macros.protein)} g protein, ${escapeHtml(macros.fibre)} g fibre.<br><strong>Measure:</strong> ${escapeHtml(measures.join(', '))}.</div>
+  </div>`;
+}
+
+function programmeGuideSection(payload = {}, profile = {}) {
+  const family = isFamilyPlanPayload(payload, profile);
+  const phases = family
+    ? [
+        ['Week 1', 'Use the shared 7-day household menu and record appetite, cost, disliked foods, and leftovers.'],
+        ['Week 2', 'Repeat the same structure but rotate proteins: fish, chicken, beans, yogurt, groundnuts, and egg where suitable.'],
+        ['Weeks 3 to 4', 'Batch-cook staples, soups, beans, greens, and sauces; adjust portions by age and activity.'],
+        ['Days 31 to 60', 'Keep the best accepted meals and replace weak meals using the same breakfast, snack, lunch, snack, dinner rhythm.']
+      ]
+    : [
+        ['Week 1', 'Follow the 7-day menu as your foundation week. Record hunger, taste, energy, digestion, and disliked foods.'],
+        ['Week 2', 'Repeat the structure with smart swaps: rotate staple, vegetable, protein, and sauce while keeping portions measured.'],
+        ['Weeks 3 to 4', 'Use the best meals more often and replace impractical meals with similar alternatives from the plan.'],
+        ['Days 31 to 60', 'Review measurements, symptoms, glucose/BP or labs where relevant, then tighten portions and variety.']
+      ];
+  return `<div class="sec"><div class="sh"><div class="si">30</div><div><div class="st">${family ? 'Household 30-60 Day Plan Guide' : '30-60 Day Plan Guide'}</div><div class="subtle">The 7-day menu is the first rotation, not the whole journey.</div></div></div>
+    <div class="phase-grid">${phases.map(([title, text]) => `<div class="phase"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function practicalRecipeGuideSection(profile = {}) {
+  const items = [
+    ['Balanced breakfast bowl', 'Plain yogurt or millet porridge, fruit, and groundnuts or seeds. Keep fruit to 1 fist-size portion; add protein so it is not only sugar.'],
+    ['Local cooked lunch plate', '1/2 to 1 cup staple, 1 palm-size protein, 2 cups vegetables, and 1 tablespoon sauce or groundnut paste where clinically safe.'],
+    ['Light dinner soup', '1 to 2 cups soup with vegetables and protein. Add a small starch only if hungry, active, pregnant, underweight, or advised.'],
+    ['Salad or bowl meal', '2 cups vegetables, 1 palm protein, 1/2 cup beans or grains if needed, avocado quarter or 1 tablespoon dressing.'],
+    ['Safe smoothie or yogurt option', 'Use only for breakfast or snack: plain yogurt or milk base, 1 small fruit portion, seeds or groundnuts, and no added sugar. Do not use smoothies to replace lunch or dinner.'],
+    ['Leftover upgrade', 'Turn leftover beans, fish, chicken, or greens into a bowl with fresh vegetables, lemon, and measured starch instead of repeating the exact same plate.']
+  ];
+  return `<div class="sec"><div class="sh"><div class="si">COOK</div><div><div class="st">Simple Recipe Guide Using Your Recommended Foods</div><div class="subtle">Use these as practical templates when repeating or swapping meals.</div></div></div>
+    <div class="support-grid">${items.map(([title, text]) => `<div class="recipe-mini"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function foodAlliesSection(profile = {}) {
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const allies = [
+    ['Beans, peas, and lentils', 'Affordable protein and fibre. Use measured portions and adjust if gut symptoms, gout, or kidney restrictions apply.'],
+    ['Fish and mukene', 'Useful protein, calcium from small fish with bones, and omega-3 support. Grill, steam, stew, or lightly cook rather than deep-fry.'],
+    ['Dark leafy vegetables', 'Support fibre, folate, potassium, magnesium, and iron. Use dodo, nakati, sukuma, spinach, cabbage, or available greens.'],
+    ['Sweet potato, matooke, millet, oats', 'Better staple choices when portions are measured and paired with protein and vegetables.'],
+    ['Plain yogurt', 'Useful for protein and gut support where tolerated. Choose unsweetened options.'],
+    ['Avocado, nuts, and seeds', 'Helpful healthy fats, but portions matter: avocado quarter, nuts one small handful, seeds 1 tablespoon.']
+  ];
+  if (condText.includes('diabetes')) allies.push(['Best for glucose control', 'Vegetables, protein, beans where tolerated, oats, millet, sweet potato, and fruit in measured whole portions.']);
+  if (condText.includes('hypertension') || condText.includes('blood pressure')) allies.push(['Best for blood pressure', 'Vegetables, fruit in measured portions, beans where tolerated, unsweetened hibiscus, and low-salt home cooking.']);
+  if (condText.includes('pregnan') || condText.includes('lactation')) allies.push(['Best for pregnancy support', 'Well-cooked protein, iron-rich foods with vitamin C, plain yogurt, greens, folate foods, safe fish choices, and hydration.']);
+  if (String(profile.budget || '').toLowerCase().includes('low')) allies.push(['Best low-budget foods', 'Beans, cowpeas, cabbage, dodo/nakati, sweet potato, pumpkin, millet, eggs where safe, and seasonal fruit.']);
+  if (String(profile.goal || '').toLowerCase().includes('weight')) allies.push(['Best for weight management', 'Soup, vegetables, beans where tolerated, fish/chicken, plain yogurt, salads/bowls, and measured staples.']);
+  return `<div class="sec"><div class="sh"><div class="si">FOOD</div><div><div class="st">Best Foods to Use Often</div><div class="subtle">Practical foods that support taste, budget, fullness, and nutrition goals.</div></div></div>
+    <div class="support-grid">${allies.map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function progressCheckpointsSection() {
+  const points = [
+    ['After 7 days', 'Which meals were realistic? Which were repeated, expensive, bland, or difficult to cook?'],
+    ['After 14 days', 'Check hunger, energy, digestion, sleep, cravings, and whether portions felt too large or too small.'],
+    ['After 30 days', 'Review weight/waist, symptoms, BP/glucose where relevant, medication changes, and meal satisfaction.'],
+    ['Before renewal', 'Use feedback to rebuild the next rotation with better taste, variety, and clinical precision.']
+  ];
+  return `<div class="sec"><div class="sh"><div class="si o">CHK</div><div><div class="st">Progress Checkpoints</div><div class="subtle">A professional plan improves through follow-up.</div></div></div>
+    <div class="phase-grid">${points.map(([title, text]) => `<div class="phase"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function protectiveFoodsSection() {
+  const foods = [
+    'Garlic, ginger, onion, herbs, and spices for flavour so meals do not depend on excess salt or sugar.',
+    'Colourful vegetables and fruit in measured portions: greens, carrots, pumpkin, tomato, papaya, passion fruit, mango, and berries where available.',
+    'Fish, beans, lentils, yogurt, chicken, eggs where suitable, and groundnuts for protein rotation.',
+    'Whole or minimally processed staples in measured portions instead of large plates of refined starch.',
+    'Unsweetened drinks such as water, herbal tea, hibiscus, or plain tea without sugar.'
+  ];
+  return `<div class="sec"><div class="sh"><div class="si r">LONG</div><div><div class="st">Long-Term Health Foods</div><div class="subtle">Simple foods to keep in the routine after the first month.</div></div></div>
+    <div class="value-list">${foods.map(food => `<p>${escapeHtml(food)}</p>`).join('')}</div>
+  </div>`;
+}
+
+function hairSkinNailsSection(macros = {}) {
+  const items = [
+    `Protein target: aim near ${macros.protein || 'your'} g/day unless kidney or medical review says otherwise. Hair, skin, and nails need consistent protein.`,
+    'Iron, zinc, vitamin D, omega-3 fats, vitamin C, and B vitamins support hair growth, skin repair, and nail strength.',
+    'If hair shedding, brittle nails, fatigue, or pale skin are significant, request ferritin/iron studies, vitamin D, B12, thyroid, and clinician review.'
+  ];
+  return `<div class="sec"><div class="sh"><div class="si">SKIN</div><div><div class="st">Nutrition for Hair, Skin and Nail Health</div><div class="subtle">A focused beauty-and-health section without exaggerated promises.</div></div></div>
+    <div class="value-list">${items.map(item => `<p>${escapeHtml(item)}</p>`).join('')}</div>
+  </div>`;
+}
+
+function gutHealthSection(macros = {}) {
+  const items = [
+    `Aim toward ${macros.fibre || 25} g fibre daily using beans, vegetables, fruit, oats, millet, and seeds, increasing gradually if your gut is sensitive.`,
+    'Use plain yogurt or fermented foods where tolerated; avoid forcing them if they worsen bloating, diarrhoea, reflux, or intolerance.',
+    'Chew slowly, eat at consistent times, drink water through the day, and record foods that cause pain, bloating, constipation, or diarrhoea.'
+  ];
+  return `<div class="sec"><div class="sh"><div class="si">GUT</div><div><div class="st">Gut Health and Digestive Wellness</div><div class="subtle">Practical digestion support that can be adjusted during follow-up.</div></div></div>
+    <div class="value-list">${items.map(item => `<p>${escapeHtml(item)}</p>`).join('')}</div>
+  </div>`;
+}
+
+function weightManagementSection(profile = {}, macros = {}) {
+  const items = [
+    'The most reliable approach is not starvation. It is a repeatable structure: protein, vegetables, measured starch, healthy fat in small portions, water, sleep, and activity.',
+    'Smoothies are kept to breakfast or snacks because drinks rarely satisfy like real meals. Lunch and dinner should usually be cooked meals, bowls, soups, legumes, fish, chicken, or vegetables.',
+    'Use the hand guide: protein one palm, starch one fist or 1/2 to 1 cup, vegetables two fists, fat one thumb or 1 tablespoon.',
+    'If you use diabetes medication, pregnancy care, kidney care, or blood-pressure medicine, avoid aggressive fasting or extreme dieting unless your clinician approves.'
+  ];
+  return `<div class="sec"><div class="sh"><div class="si o">WG</div><div><div class="st">Weight Management: What Actually Works</div><div class="subtle">Evidence-informed habits that are realistic enough to keep.</div></div></div>
+    <div class="value-list">${items.map(item => `<p>${escapeHtml(item)}</p>`).join('')}</div>
+  </div>`;
+}
+
+function profileTextIncludes(profile = {}, words = []) {
+  const text = JSON.stringify(profile || {}).toLowerCase();
+  return words.some(word => text.includes(String(word).toLowerCase()));
+}
+
+function specialistClinicalItems(profile = {}, clinicalSummary = {}) {
+  const conds = cleanList(profile.conds || clinicalSummary.conditions).map(c => String(c).toLowerCase());
+  const has = words => words.some(word => conds.includes(word) || profileTextIncludes(profile, [word]));
+  const items = [];
+  if (has(['diabetes', 'prediabetes', 'glucose', 'hba1c'])) {
+    items.push({
+      title: 'Diabetes / Glucose Support',
+      chapter: 'This plan supports blood-glucose stability through measured carbohydrate portions, protein pairing, vegetables, fibre, consistent meal timing, and avoidance of sweet drinks. Carbohydrates should not be eaten alone where possible. If insulin or glucose-lowering medicine is used, meals should not be skipped without clinician guidance.',
+      targets: [
+        ['Carbohydrate distribution', 'Spread measured carbohydrates across meals; avoid one very large starch-heavy meal.'],
+        ['Plate target', '2 cups vegetables, 1 palm protein, 1/2 to 1 cup measured starch at main meals.'],
+        ['Monitoring', 'Track fasting and 2-hour post-meal glucose where available, especially after new meals.'],
+        ['Safety gate', 'Medication users should avoid aggressive fasting or skipped meals unless approved by a clinician.']
+      ]
+    });
+  }
+  if (has(['hypertension', 'blood pressure', 'sbp', 'dbp'])) {
+    items.push({
+      title: 'Hypertension / Blood Pressure Support',
+      chapter: 'This plan supports blood pressure by reducing salt-heavy foods, improving vegetable intake, using beans and fruit in measured portions where suitable, and replacing salty flavouring with tomato, onion, garlic, ginger, lemon, herbs, and spices.',
+      targets: [
+        ['Sodium direction', 'Use low-salt home cooking; reduce stock cubes, salty sauces, processed meats, salted snacks, and salty takeaways.'],
+        ['Potassium caution', 'Vegetables and fruit can support BP, but kidney disease requires potassium review first.'],
+        ['Monitoring', 'Record home BP if available, especially when symptoms, medication changes, or high readings occur.'],
+        ['Meal pattern', 'Avoid relying on fried/salty snacks as meals; use structured meals with protein and vegetables.']
+      ]
+    });
+  }
+  if (has(['cholesterol', 'ldl', 'triglyceride', 'triglycerides', 'lipid'])) {
+    items.push({
+      title: 'LDL / Cholesterol Support',
+      chapter: 'This plan supports LDL reduction by increasing soluble fibre, rotating lean proteins and legumes, and reducing frequent deep-fried foods, processed meats, pastries, and heavy saturated-fat patterns.',
+      targets: [
+        ['Soluble fibre', 'Use oats, beans, peas, lentils, vegetables, fruit, and seeds regularly, increasing fibre gradually.'],
+        ['Fat quality', 'Use fish, avocado, nuts/seeds, and measured oils; reduce repeated deep-fried foods and processed meats.'],
+        ['Protein rotation', 'Rotate fish, chicken, beans/lentils, yogurt, groundnuts, and eggs only where suitable.'],
+        ['Monitoring', 'Review LDL, HDL, triglycerides, weight/waist, and medication changes during follow-up.']
+      ]
+    });
+  }
+  if (has(['kidney', 'egfr', 'creatinine', 'ckd'])) {
+    items.push({
+      title: 'Kidney Review Nutrition',
+      chapter: 'Kidney nutrition must be lab-guided. Protein, potassium, phosphorus, sodium, and fluid advice should be adjusted using eGFR, creatinine, potassium, phosphate, urine results, blood pressure, swelling symptoms, appetite, and clinician advice.',
+      targets: [
+        ['Lab gate', 'Confirm eGFR, creatinine, potassium, phosphate, urine protein, BP, and swelling before major changes.'],
+        ['Protein caution', 'Avoid aggressive high-protein dieting until kidney stage and clinician advice are known.'],
+        ['Mineral caution', 'Do not automatically restrict all fruits/vegetables; adjust potassium/phosphorus only when labs require it.'],
+        ['Safety', 'Swelling, breathlessness, very low urine, confusion, or severe weakness needs medical review.']
+      ]
+    });
+  }
+  if (has(['gout', 'uric', 'uric acid'])) {
+    items.push({
+      title: 'Gout / Uric Acid Support',
+      chapter: 'This plan supports gout risk reduction through hydration, steady weight management, reduced alcohol and sweet drinks, and careful review of very high-purine foods. Food tolerance should be reviewed individually rather than using extreme restriction.',
+      targets: [
+        ['Hydration', 'Prioritise water and unsweetened drinks unless fluid restriction has been prescribed.'],
+        ['Reduce', 'Avoid organ meats and reduce alcohol/sugary drinks; review fish and legumes based on symptoms and clinician advice.'],
+        ['Weight pattern', 'Avoid crash dieting, which may worsen uric-acid instability.'],
+        ['Monitoring', 'Track flare timing, uric acid results where available, alcohol intake, hydration, and trigger meals.']
+      ]
+    });
+  }
+  if (has(['ibs', 'gut', 'bloating', 'constipation', 'diarrhoea', 'reflux'])) {
+    items.push({
+      title: 'IBS / Gut-Sensitive Support',
+      chapter: 'This plan supports gut tolerance with cooked meals, gradual fibre progression, smaller portions, symptom tracking, and structured reintroduction. It should not remove many foods permanently without review.',
+      targets: [
+        ['Trigger tracking', 'Track beans, milk, onions, garlic, cabbage, wheat, high-fat meals, and selected fruits if symptoms flare.'],
+        ['Fibre progression', 'Increase fibre gradually; use cooked vegetables, oats, soups, and tolerated legumes in measured portions.'],
+        ['Meal size', 'Use smaller regular meals if bloating/reflux worsens after large meals.'],
+        ['Review', 'Blood in stool, unexplained weight loss, persistent vomiting, fever, or severe pain requires medical care.']
+      ]
+    });
+  }
+  if (has(['anemia', 'anaemia', 'haemoglobin', 'hemoglobin', 'ferritin', 'iron'])) {
+    items.push({
+      title: 'Iron / Anaemia Support',
+      chapter: 'This plan supports iron status by pairing iron-rich foods with vitamin C and avoiding tea/coffee at iron-rich meals. Low haemoglobin, low ferritin, pregnancy, heavy bleeding, or severe fatigue needs clinical follow-up.',
+      targets: [
+        ['Iron foods', 'Use beans, greens, fish, lean meat where used, eggs where suitable, and fortified foods where available.'],
+        ['Vitamin C pairing', 'Add citrus, tomato, passion fruit, guava, or other vitamin-C foods with iron-rich meals.'],
+        ['Avoid interference', 'Keep tea/coffee away from iron-rich meals where possible.'],
+        ['Monitoring', 'Review full blood count, ferritin, B12/folate where relevant, and cause of anaemia.']
+      ]
+    });
+  }
+  if (has(['thyroid', 'tsh', 'hypothyroid', 'hyperthyroid'])) {
+    items.push({
+      title: 'Thyroid Nutrition Support',
+      chapter: 'This plan supports thyroid-related nutrition through adequate protein, iron, zinc, selenium, iodine from safe food sources, fibre, and steady meal timing. Medication timing should follow clinician or pharmacist advice.',
+      targets: [
+        ['Meal rhythm', 'Use regular meals to support energy and appetite stability.'],
+        ['Micronutrients', 'Prioritise iron, zinc, selenium, iodine from food, vitamin D, and B12 where clinically relevant.'],
+        ['Medication timing', 'Separate thyroid medication from food/supplements according to clinician/pharmacist instructions.'],
+        ['Monitoring', 'Review TSH/T3/T4 results, symptoms, medication changes, weight trend, and fatigue.']
+      ]
+    });
+  }
+  if (has(['pregnant', 'pregnancy', 'trimester', 'prenatal', 'lactation', 'breastfeeding'])) {
+    items.push({
+      title: 'Pregnancy / Lactation Support',
+      chapter: 'This plan prioritises food safety, protein, iron, folate, calcium, iodine, vitamin D, hydration, nausea-friendly meals, constipation prevention, and safe weight-gain monitoring according to trimester or breastfeeding status.',
+      targets: [
+        ['Food safety', 'Use well-cooked proteins; avoid alcohol, unpasteurised dairy, and unsafe high-mercury fish.'],
+        ['Nutrient focus', 'Protein, iron/folate foods, calcium foods, vitamin D, iodine, fluids, and fibre.'],
+        ['Symptom support', 'Use smaller frequent meals for nausea/reflux and fibre/fluids for constipation where tolerated.'],
+        ['Urgent review', 'Bleeding, severe headache, severe swelling, fever, high BP, reduced foetal movement, or severe vomiting needs clinical care.']
+      ]
+    });
+  }
+  if (has(['pmos', 'pcos', 'polycystic', 'insulin resistance'])) {
+    items.push({
+      title: 'PMOS / Insulin-Resistance Support',
+      chapter: 'This plan supports PMOS-related metabolic health through protein at meals, measured carbohydrates, fibre, strength-friendly nutrition, sleep support, and reduced sugary drinks. It should not promise cure or diagnose hormonal disease.',
+      targets: [
+        ['Carb quality', 'Use measured whole staples and avoid large refined-starch or sugary-drink patterns.'],
+        ['Protein/fibre', 'Include protein and vegetables at main meals to support appetite and glucose stability.'],
+        ['Movement', 'Strength training and walking can support insulin sensitivity where safe and realistic.'],
+        ['Monitoring', 'Track cycles, acne/hair changes, waist, glucose/HbA1c if available, and medication use.']
+      ]
+    });
+  }
+  if (has(['obesity', 'metabolic syndrome', 'weight loss', 'overweight'])) {
+    items.push({
+      title: 'Obesity / Metabolic Health Support',
+      chapter: 'This plan supports gradual fat loss and metabolic health without starvation. The focus is protein consistency, vegetables, measured starches, hydration, sleep, movement, and sustainable meal repetition with variety.',
+      targets: [
+        ['Pace', 'Aim for gradual progress, usually about 0.25 to 0.75 kg per week when appropriate.'],
+        ['Plate structure', 'Protein + vegetables first, measured starch, and small healthy-fat portions.'],
+        ['Appetite', 'Use real cooked meals, soups, bowls, and protein snacks rather than drink-only days.'],
+        ['Monitoring', 'Track weight/waist weekly, hunger, cravings, sleep, energy, and adherence.']
+      ]
+    });
+  }
+  if (has(['cancer', 'oncology', 'chemotherapy', 'radiotherapy'])) {
+    items.push({
+      title: 'Cancer Supportive Nutrition',
+      chapter: 'This plan can support nourishment during cancer care but must not replace oncology treatment. Priorities are maintaining intake, protein, safe food handling, symptom-aware meals, hydration, and clinician-led adjustments during treatment.',
+      targets: [
+        ['Protein and energy', 'Use small frequent meals and protein-rich foods if appetite is low, unless restricted by the care team.'],
+        ['Food safety', 'Use careful hygiene, safe storage, and well-cooked foods when immunity may be low.'],
+        ['Symptom support', 'Adjust texture, smell, spice, acidity, and portion size for nausea, mouth sores, diarrhoea, constipation, or taste changes.'],
+        ['Clinical gate', 'Unplanned weight loss, poor intake, fever, severe diarrhoea/vomiting, or swallowing difficulty needs medical review.']
+      ]
+    });
+  }
+  if (isFamilyPlanPayload({}, profile)) {
+    items.push({
+      title: 'Family Plan Clinical Personalisation',
+      chapter: 'The household should use one shared meal base, then adjust each plate by age, appetite, activity, pregnancy, child growth, older-adult needs, and any individual conditions. One member\'s clinical restriction should not automatically be applied to everyone.',
+      targets: [
+        ['Shared base', 'Cook one protein/legume, vegetable, staple, and sauce base where possible.'],
+        ['Individual portions', 'Adjust starch, protein, salt, sugar, texture, and snacks per member.'],
+        ['Condition conflicts', 'Diabetes, kidney, pregnancy, child growth, and older-adult needs require different plate adjustments.'],
+        ['Follow-up', 'Review taste, cost, acceptance, symptoms, repeated foods, and member-specific measurements.']
+      ]
+    });
+  }
+  return items;
+}
+
+function conditionChaptersSection(profile = {}, clinicalSummary = {}) {
+  const chapters = specialistClinicalItems(profile, clinicalSummary);
+  if (!chapters.length) return '';
+  const targetRows = chapters.flatMap(item => item.targets.map(([target, guidance]) => [item.title, target, guidance]));
+  return `<div class="sec"><div class="sh"><div class="si b">CL</div><div><div class="st">Condition-Specific Nutrition Chapters</div><div class="subtle">Targeted guidance for the health concerns submitted in the assessment.</div></div></div>
+    <div class="support-grid">${chapters.map(item => `<div class="info-card"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.chapter)}</p></div>`).join('')}</div>
+    <div class="week-card" style="margin-top:8px"><div class="day-title">Clinical Targets for This Specialist Plan</div><table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Condition</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Target area</th><th style="text-align:left;padding:7px;border-bottom:1px solid #eee6dc">Patient-safe guidance</th></tr></thead><tbody>${targetRows.map(([condition, target, guidance]) => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(condition)}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(target)}</td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(guidance)}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+
+function foodAvoidReplacementSection(profile = {}) {
+  const conds = cleanList(profile.conds).map(c => String(c).toLowerCase());
+  const rows = [];
+  rows.push(['Soda, sweet juice, and energy drinks', 'Water, unsweetened hibiscus, unsweetened tea, lemon water, or diluted fresh fruit flavour without added sugar.']);
+  rows.push(['Deep-fried foods as the default cooking method', 'Grill, steam, stew, bake, air-fry lightly, or pan-cook with measured oil.']);
+  rows.push(['Large posho, rice, pasta, or white-bread portions', 'Measured matooke, sweet potato, millet, oats, vegetables, beans, or 1/2 to 1 cup cooked starch depending on the plan.']);
+  rows.push(['Salty processed foods, stock cubes, and heavy sauces', 'Herbs, tomato, onion, garlic, lemon, ginger, vinegar, pepper, and spices.']);
+  if (conds.includes('diabetes') || profileTextIncludes(profile, ['diabetes', 'glucose', 'hba1c'])) rows.push(['Sugary drinks and large refined starch plates', 'Water, unsweetened tea, measured whole staples, vegetables, and protein-paired meals.']);
+  if (conds.includes('hypertension') || profileTextIncludes(profile, ['hypertension', 'blood pressure'])) rows.push(['High-salt processed foods and salty cooking', 'Herbs, garlic, ginger, onion, tomato, lemon, vinegar, and measured salt.']);
+  if (conds.includes('cholesterol') || profileTextIncludes(profile, ['cholesterol', 'ldl'])) rows.push(['Frequent deep-fried foods and processed meats', 'Grilled fish, chicken, beans, yogurt, vegetable stews, and measured healthy fats.']);
+  if (conds.includes('kidney') || profileTextIncludes(profile, ['kidney', 'egfr'])) rows.push(['Unreviewed high-protein or high-potassium diets', 'Lab-guided portions and clinician-reviewed protein, potassium, phosphorus, and sodium targets.']);
+  if (conds.includes('ibs') || profileTextIncludes(profile, ['ibs', 'bloating'])) rows.push(['Large portions of personal trigger foods', 'Smaller cooked portions, symptom tracking, and structured reintroduction after symptoms calm.']);
+  if (!rows.length) {
+    rows.push(['Ultra-processed snacks and sweetened drinks', 'Whole meals with protein, vegetables, fibre, measured starch, and water.']);
+    rows.push(['Skipping meals then overeating later', 'Regular meal rhythm with practical snacks when needed.']);
+  }
+  return `<div class="sec"><div class="sh"><div class="si r">SWAP</div><div><div class="st">Foods to Reduce and Smarter Replacements</div><div class="subtle">Practical swaps that make meals easier to follow.</div></div></div>
+    <div class="support-grid">${rows.map(([avoid, replace]) => `<div class="info-card"><strong>Reduce: ${escapeHtml(avoid)}</strong><p><b>Replace with:</b> ${escapeHtml(replace)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function personalisedFoodStrategySection(profile = {}, macros = {}) {
+  const conds = cleanList(profile.conds).map(c => String(c).toLowerCase());
+  const strategy = [];
+  if (conds.includes('diabetes') || profileTextIncludes(profile, ['diabetes', 'glucose', 'hba1c'])) {
+    strategy.push(['Glucose-stable plate', 'At lunch and dinner, use 2 cups vegetables, 1 palm protein, and 1/2 to 1 cup measured starch. Avoid taking starch alone.']);
+  }
+  if (conds.includes('hypertension') || profileTextIncludes(profile, ['hypertension', 'blood pressure'])) {
+    strategy.push(['Blood-pressure friendly flavour', 'Build flavour with tomato, onion, garlic, ginger, lemon, herbs, and spices so salt does not carry the whole meal.']);
+  }
+  if (conds.includes('cholesterol') || profileTextIncludes(profile, ['cholesterol', 'ldl'])) {
+    strategy.push(['LDL-lowering fibre', 'Use oats, beans, peas, lentils, fruit, vegetables, and seeds regularly. Fibre should rise gradually if the gut is sensitive.']);
+  }
+  if (conds.includes('ibs') || profileTextIncludes(profile, ['ibs', 'bloating'])) {
+    strategy.push(['Gut-sensitive rotation', 'Use smaller portions, softer cooked foods, soups, rice/oats/sweet potato where tolerated, and track personal triggers.']);
+  }
+  if (conds.includes('kidney') || profileTextIncludes(profile, ['kidney', 'egfr'])) {
+    strategy.push(['Kidney lab gate', 'Do not force high-protein, high-potassium, or high-phosphorus foods until kidney labs confirm the safe target range.']);
+  }
+  if (profileTextIncludes(profile, ['pregnant', 'pregnancy', 'lactation', 'breastfeeding'])) {
+    strategy.push(['Pregnancy-safe meals', 'Use well-cooked proteins, safe dairy, iron and folate foods, hydration, and small frequent meals if nausea or reflux is present.']);
+  }
+  if (!strategy.length) {
+    strategy.push(['Core plate method', 'Use vegetables first, then protein, then measured starch. This creates fullness and better energy without extreme dieting.']);
+    strategy.push(['Protein rhythm', `Aim for protein at each main meal so the daily target of about ${macros.protein || 'your'} g is easier to reach.`]);
+  }
+  strategy.push(['Taste principle', 'A plan only works if the food is enjoyable. Use herbs, acidity, texture, sauces in measured portions, and smart swaps instead of plain boring meals.']);
+  return `<div class="sec"><div class="sh"><div class="si">MAP</div><div><div class="st">Personalised Food Strategy</div><div class="subtle">The simple food logic behind this plan, written for real life.</div></div></div>
+    <div class="support-grid">${strategy.map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function shoppingItemQty(item, count, profile = {}) {
+  const family = count > 1;
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const kidney = condText.includes('kidney') || condText.includes('egfr') || condText.includes('creatinine');
+  const gout = condText.includes('gout') || condText.includes('uric');
+  const cholesterol = condText.includes('cholesterol') || condText.includes('ldl');
+  const eggSensitive = /egg allergy|allergic to egg|eggs allergy|avoid egg|avoid eggs/.test(condText);
+  const qty = {
+    avocado: family ? '3-5 pieces' : '1-2 pieces',
+    beans: family ? '1-2 kg dry beans/cowpeas' : '500g-1 kg dry beans/cowpeas',
+    cabbage: family ? '2 heads' : '1 head',
+    carrot: family ? '1 kg' : '500g',
+    dodo: kidney ? 'use only after potassium review' : family ? '3-5 bunches' : '1-2 bunches',
+    nakati: kidney ? 'use only after potassium review' : family ? '2-4 bunches' : '1-2 bunches',
+    eggs: eggSensitive ? 'avoid' : cholesterol || kidney ? '6-10 eggs maximum if approved' : family ? '10-15 eggs, not a full tray unless heavily used' : '4-6 eggs',
+    garlic: family ? '1-2 bulbs' : '1 bulb',
+    ginger: '1 medium piece',
+    groundnuts: kidney ? 'use only after potassium/phosphorus review' : family ? '500g' : '250g',
+    lemon: family ? '5-8 pieces' : '3-4 pieces',
+    mukene: kidney || gout ? 'avoid until reviewed' : family ? '250-500g, rinse well' : '150-250g, rinse well',
+    onion: family ? '1 kg' : '500g',
+    pumpkin: family ? '1 medium pumpkin' : '1 small pumpkin or 1/2 medium',
+    sweet_potato: kidney ? 'use only after potassium review' : family ? '2-3 kg' : '1-2 kg',
+    tilapia: gout || kidney ? 'fresh fish only if clinician/dietician approves' : family ? '3-5 palm-size portions' : '2-3 palm-size portions',
+    tomato: family ? '1.5-2 kg' : '500g-1 kg',
+    yogurt: family ? '4-6 cups plain unsweetened' : '2-3 cups plain unsweetened',
+    chicken: family ? '3-5 palm-size portions' : '2 palm-size portions',
+    oats: family ? '500g-1 kg' : '500g',
+    millet: family ? '1-2 kg' : '500g-1 kg',
+    cucumber: family ? '3-5 pieces' : '1-2 pieces',
+    fruit: family ? '7-14 pieces seasonal fruit' : '4-7 pieces seasonal fruit'
+  };
+  return qty[item] || (family ? 'family quantity' : 'single-person quantity');
+}
+
+function shoppingItemLabel(item) {
+  const labels = {
+    sweet_potato: 'sweet potato',
+    fruit: 'seasonal fruit'
+  };
+  return labels[item] || item;
+}
+
+function planShoppingWeeks(profile = {}, count = 1) {
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const kidney = condText.includes('kidney') || condText.includes('egfr') || condText.includes('creatinine');
+  const gout = condText.includes('gout') || condText.includes('uric');
+  const eggSensitive = /egg allergy|allergic to egg|eggs allergy|avoid egg|avoid eggs/.test(condText);
+  const base = ['beans', 'cabbage', 'carrot', 'tomato', 'onion', 'garlic', 'ginger', 'lemon', 'pumpkin', 'yogurt', 'fruit'];
+  const greenSet = kidney ? ['cabbage', 'cucumber'] : ['dodo', 'nakati', 'cabbage'];
+  const proteinWeek1 = eggSensitive ? ['chicken', 'tilapia'] : ['eggs', 'tilapia'];
+  const proteinWeek2 = kidney || gout ? ['chicken', 'beans'] : ['mukene', 'beans'];
+  const proteinWeek3 = eggSensitive ? ['chicken', 'yogurt'] : ['eggs', 'beans', 'yogurt'];
+  const proteinWeek4 = kidney || gout ? ['chicken', 'tilapia'] : ['tilapia', 'beans'];
+  const weeks = [
+    ['Week 1', [...base, ...greenSet, ...proteinWeek1, 'sweet_potato', 'avocado']],
+    ['Week 2', [...base, ...greenSet, ...proteinWeek2, 'millet', 'oats']],
+    ['Week 3', [...base, ...greenSet, ...proteinWeek3, 'sweet_potato', 'groundnuts']],
+    ['Week 4', [...base, ...greenSet, ...proteinWeek4, 'millet', 'avocado']]
+  ];
+  return weeks.map(([title, items]) => {
+    const seen = new Set();
+    return {
+      title,
+      items: items.filter(item => {
+        if (seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      }).map(item => [shoppingItemLabel(item), shoppingItemQty(item, count, profile)])
+    };
+  });
+}
+
+function weeklyShoppingMealPrepSection(payload = {}, profile = {}) {
+  const family = isFamilyPlanPayload(payload, profile);
+  const fd = profile.familyData || payload.familyData || {};
+  const count = family ? Math.max(2, Number.parseInt(fd.count || profile.familyCount || 4, 10) || 4) : 1;
+  const multiplier = family ? count : 1;
+  const budget = String(profile.budget || fd.budget || '').toLowerCase();
+  const lowBudget = budget.includes('low') || budget.includes('budget');
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const basket = [
+    ['Weekly protein basket', lowBudget ? 'Beans, cowpeas, peas, lentils, eggs where suitable, mukene where safe and affordable.' : 'Fish, chicken, beans, yogurt, eggs where suitable, peas, lentils, or lean meat in measured portions.'],
+    ['Vegetable basket', 'Dodo, nakati, sukuma wiki, cabbage, carrots, tomatoes, onions, cucumber, pumpkin, eggplant, or available seasonal vegetables.'],
+    ['Measured staple basket', 'Matooke, sweet potato, millet, oats, rice, cassava, or posho in measured portions depending on the plan.'],
+    ['Taste and snack basket', 'Plain yogurt, fruit, groundnuts, avocado, seeds, lemon, ginger, garlic, herbs, and unsweetened drinks.']
+  ];
+  if (lowBudget) basket.push(['Low-budget basket', 'Beans/cowpeas, cabbage, dodo/nakati, sweet potato, pumpkin, millet, seasonal fruit, groundnuts in small portions, and eggs where safe.']);
+  if (family) basket.push(['Family basket', 'One shared protein base, two vegetable options, one soup/stew base, two measured staples, fruit for snacks, and packed-lunch foods.']);
+  if (condText.includes('diabetes')) basket.push(['Diabetic-friendly basket', 'Non-starchy vegetables, beans where tolerated, plain yogurt, fish/chicken/eggs where safe, oats/millet, sweet potato, avocado, and unsweetened drinks.']);
+  if (condText.includes('pregnan') || condText.includes('lactation')) basket.push(['Pregnancy basket', 'Well-cooked protein, plain yogurt or pasteurised dairy, iron-rich foods, greens, citrus/vitamin C foods, safe fish choices, and nausea-friendly staples.']);
+  const weeklyQty = family
+    ? [
+        ['Week 1 foundation basket', `${count * 7} palm-size protein portions, ${count * 14} cups vegetables across the week, 2 staple choices, 1 soup/stew base, and fruit/snacks for school or work.`],
+        ['Week 2 protein rotation basket', `Rotate proteins: beans/cowpeas twice, fish or mukene twice where safe, chicken or lean meat once or twice, yogurt/snack protein, and eggs only where suitable.`],
+        ['Week 3 budget batch basket', `Batch-cook beans/cowpeas, greens, pumpkin/sweet potato, and one sauce base. Buy seasonal vegetables first, then add fish/chicken if budget allows.`],
+        ['Week 4 refresh basket', `Repeat the best accepted meals, replace disliked meals, and buy only the proteins/staples that supported appetite, cost, symptoms, and household acceptance.`]
+      ]
+    : [
+        ['Week 1 foundation basket', '7 palm-size protein portions, 10 to 14 cups vegetables across the week, 2 staple choices, 2 fruit types, plain yogurt or snack protein, herbs/spices, and unsweetened drinks.'],
+        ['Week 2 protein rotation basket', 'Rotate fish/chicken/beans/yogurt/groundnuts/egg where safe. Keep lunch and dinner as real meals, not drinks.'],
+        ['Week 3 budget batch basket', 'Batch beans or lentils, greens, soup base, sweet potato/pumpkin, and one salad/bowl base so cooking stays realistic.'],
+        ['Week 4 refresh basket', 'Repeat the meals that tasted good and replace meals that were expensive, bland, repetitive, or difficult to prepare.']
+      ];
+  const prep = [
+    'Batch-cook beans, cowpeas, or lentils once or twice weekly. Freeze or refrigerate in meal-size containers.',
+    'Steam or roast sweet potatoes, pumpkin, or matooke ahead, then portion before serving.',
+    'Wash and chop greens for 2 to 3 days. Cook greens briefly so they stay bright, tasty, and not watery.',
+    'Grill, steam, stew, or pan-cook fish/chicken with measured oil. Avoid making deep-frying the default.',
+    'Make salad bases dry: cabbage/cucumber/carrot/tomato separately from dressing so they stay fresh.',
+    'Prepare yogurt/smoothie options safely: unsweetened base, one small fruit portion, no added sugar, and use only for breakfast/snacks.',
+    'Store leftovers safely: cool quickly, cover, refrigerate, reheat thoroughly, and avoid keeping cooked food at room temperature for long.'
+  ];
+  const scaleNote = family
+    ? `For this household, multiply most vegetable portions by about ${multiplier}; scale protein by palm-size portions per person; reduce toddler portions and increase active teen/adult portions.`
+    : 'For one person, cook two to three base foods at a time so the plan stays realistic without eating the same meal every day.';
+  const shoppingWeeks = planShoppingWeeks(profile, count).map(week => `<div class="week-card"><div class="week-head"><div class="week-title">${escapeHtml(week.title)} Market List</div><div class="week-focus">Starting quantities. Adjust after taste, budget, symptoms, and leftovers are reviewed.</div></div><div class="day-block"><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${week.items.map(([item, qty]) => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(item)}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(qty)}</td></tr>`).join('')}</tbody></table></div></div>`).join('');
+  return `<div class="sec"><div class="sh"><div class="si o">SHOP</div><div><div class="st">Weekly Shopping and Meal Prep Guide</div><div class="subtle">This turns the plan from a document into food that can actually happen.</div></div></div>
+    <div class="support-grid">
+      ${basket.map(([title, item]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(item)}</p></div>`).join('')}
+    </div>
+    <div style="margin-top:10px">${shoppingWeeks}</div>
+    <div class="phase-grid" style="margin-top:8px">
+      ${weeklyQty.map(([title, item]) => `<div class="phase"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(item)}</p></div>`).join('')}
+    </div>
+    <div class="value-list" style="margin-top:8px">${prep.map(item => `<p>${escapeHtml(item)}</p>`).join('')}<p><strong>Scaling note:</strong> ${escapeHtml(scaleNote)}</p></div>
+  </div>`;
+}
+
+function followUpRoadmapSection(profile = {}) {
+  const rows = [
+    ['Day 7', 'Report taste, hunger, bloating, cost, disliked meals, repeated foods, and whether portions felt realistic.'],
+    ['Day 14', 'Review adherence, cravings, energy, sleep, digestion, and barriers such as shopping, cooking time, school, or work.'],
+    ['Day 30', 'Review weight/waist, BP or glucose where relevant, symptoms, menstrual/pregnancy changes, and meal satisfaction.'],
+    ['Day 60', 'Decide what to continue, what to replace, whether labs are needed, and whether the next plan should intensify or simplify.']
+  ];
+  if (profileTextIncludes(profile, ['diabetes', 'glucose', 'hba1c'])) rows.push(['Glucose review', 'If available, compare fasting and post-meal glucose readings with the meals that caused the best and worst responses.']);
+  if (profileTextIncludes(profile, ['hypertension', 'blood pressure', 'sbp', 'dbp'])) rows.push(['BP review', 'Track home BP if available, salt-heavy meals, sleep, stress, alcohol, and medication adherence.']);
+  if (profileTextIncludes(profile, ['kidney', 'egfr', 'creatinine'])) rows.push(['Kidney review', 'Bring kidney labs before major protein, potassium, phosphorus, or sodium changes.']);
+  return `<div class="sec"><div class="sh"><div class="si b">ROAD</div><div><div class="st">Follow-Up and Progress Roadmap</div><div class="subtle">Customers should know exactly how the plan becomes stronger over time.</div></div></div>
+    <div class="phase-grid">${rows.slice(0, 4).map(([title, text]) => `<div class="phase"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+    ${rows.length > 4 ? `<div class="value-list" style="margin-top:8px">${rows.slice(4).map(([title, text]) => `<p><strong>${escapeHtml(title)}:</strong> ${escapeHtml(text)}</p>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function premiumFamilySupportSection(payload = {}, profile = {}) {
+  if (!isFamilyPlanPayload(payload, profile)) return '';
+  const fd = profile.familyData || payload.familyData || {};
+  const count = Math.max(2, Number.parseInt(fd.count || profile.familyCount || 4, 10) || 4);
+  const children = Math.max(0, Number.parseInt(fd.children || 0, 10) || 0);
+  const adults = Math.max(1, count - children);
+  const schoolNote = children ? 'Include school-friendly foods: fruit, boiled egg/yogurt where safe, roasted groundnuts if allowed, vegetable wraps/bowls, beans, or leftovers packed safely.' : 'Use work-friendly leftovers: bowls, soups, cooked staples, vegetables, and protein packed separately where possible.';
+  const ages = String(fd.ages || '').split(/[,;|]/).map(x => x.trim()).filter(Boolean).slice(0, 10);
+  const memberRows = (ages.length ? ages : ['Adult', 'Teen/child']).map((age, index) => {
+    const n = Number.parseInt(age, 10);
+    const group = Number.isFinite(n) ? (n < 6 ? 'young child' : n < 13 ? 'child' : n < 18 ? 'teen' : n >= 60 ? 'older adult' : 'adult') : age;
+    const portion = group === 'young child' ? '1/3 to 1/2 adult starch, soft protein, finely prepared vegetables.'
+      : group === 'child' ? '1/2 to 2/3 adult starch, child palm protein, vegetables prepared simply.'
+      : group === 'teen' ? 'Adult-style plate; increase protein/starch if active or growing fast.'
+      : group === 'older adult' ? 'Protein at each meal, softer textures if needed, hydration and fibre focus.'
+      : 'Standard plate: 2 cups vegetables, 1 palm protein, 1/2 to 1 cup starch.';
+    return `<div class="info-card"><strong>Member ${index + 1}: ${escapeHtml(group)}</strong><p>${escapeHtml(portion)}</p></div>`;
+  }).join('');
+  const shoppingQty = `Weekly household guide: about ${count * 7} palm-size protein portions, ${count * 14} cups vegetables across the week, 2 to 3 staple options, and fruit/snacks planned for school or work.`;
+  return `<div class="sec"><div class="sh"><div class="si">FAM</div><div><div class="st">Family and Household Value Guide</div><div class="subtle">Extra guidance so household plans feel properly personalised.</div></div></div>
+    <div class="support-grid">
+      <div class="info-card"><strong>Household size</strong><span>${escapeHtml(count)}</span><p>${escapeHtml(adults)} adult/teen estimate and ${escapeHtml(children)} child estimate.</p></div>
+      <div class="info-card"><strong>Shared cooking</strong><p>Cook one base meal, then adjust starch, protein, vegetables, sauce, and snack portions by age, appetite, activity, and medical needs.</p></div>
+      <div class="info-card"><strong>Lunch practicality</strong><p>${escapeHtml(schoolNote)}</p></div>
+      <div class="info-card"><strong>Household shopping quantities</strong><p>${escapeHtml(shoppingQty)}</p></div>
+    </div>
+    <div class="support-grid" style="margin-top:8px">${memberRows}</div>
+    <div class="note" style="margin-top:8px"><strong>30-day family rotation:</strong> Week 1 uses the menu below. Week 2 rotates proteins. Week 3 rotates staples and vegetables. Week 4 keeps the meals the household accepted best and replaces impractical meals.</div>
+  </div>`;
+}
+
+function cycleBasedNutritionSection(profile = {}) {
+  const data = profile.cycleData || profile.cycle || {};
+  const phase = String(data.phase || data.currentPhase || '').toLowerCase();
+  if (!phase && !profileTextIncludes(profile, ['menstrual', 'cycle', 'pms', 'period', 'menopause'])) return '';
+  const phaseMap = {
+    menstrual: ['Menstrual Phase', 'Prioritise iron-rich foods, vitamin C with meals, magnesium-rich foods, warm fluids, and gentle meals if appetite is low. Severe bleeding, faintness, or severe pain needs clinical care.'],
+    follicular: ['Follicular Phase', 'Energy often improves. This is a good time to build consistency with protein, vegetables, whole staples, hydration, and exercise.'],
+    ovulatory: ['Ovulatory Phase', 'Focus on antioxidant-rich foods, zinc, B vitamins, protein, colourful fruit and vegetables, and hydration.'],
+    luteal: ['Luteal Phase / PMS Support', 'Prioritise magnesium, calcium, protein, and slow carbohydrates. Reduce excess sugar, alcohol, and salty snacks if bloating or cravings worsen.'],
+    menopause: ['Perimenopause / Menopause Support', 'Support protein, calcium, vitamin D, magnesium, fibre, omega-3 foods, strength training, and sleep quality. Hot flashes may worsen with alcohol and excess caffeine.']
+  };
+  const chosen = phaseMap[phase] || ['Cycle-Based Nutrition Guide', 'Nutrition should respond to energy, appetite, cravings, bleeding pattern, cramps, sleep, and mood changes across the cycle. Track symptoms for two to three cycles to refine the plan.'];
+  return `<div class="sec"><div class="sh"><div class="si p">CY</div><div><div class="st">Cycle-Based Nutrition Guide</div><div class="subtle">Included because cycle or hormonal details were submitted.</div></div></div>
+    <div class="note"><strong>${escapeHtml(chosen[0])}:</strong> ${escapeHtml(chosen[1])}</div>
+  </div>`;
+}
+
+function pregnancyLactationSection(profile = {}, macros = {}) {
+  const data = profile.prenatal || {};
+  const isRelevant = profile.isPrenatal || profileTextIncludes(profile, ['pregnant', 'pregnancy', 'lactation', 'breastfeeding', 'trimester']);
+  if (!isRelevant && !Object.keys(data).length) return '';
+  const trimester = String(data.trimester || profile.trimester || '').toLowerCase();
+  const focus = trimester.includes('1') || trimester.includes('first')
+    ? 'First trimester support: nausea-friendly meals, hydration, folate-rich foods, food safety, and small frequent meals if appetite is low.'
+    : trimester.includes('2') || trimester.includes('second')
+      ? 'Second trimester support: protein, iron, calcium, vitamin D, omega-3 foods, vegetables, and steady energy as growth increases.'
+      : trimester.includes('3') || trimester.includes('third')
+        ? 'Third trimester support: adequate protein, iron, calcium, hydration, constipation prevention, reflux-friendly meals, and safe weight-gain monitoring.'
+        : 'Pregnancy/lactation support: food safety, protein, iron, folate, calcium, iodine, vitamin D, hydration, and appetite-friendly meals.';
+  return `<div class="sec"><div class="sh"><div class="si b">PN</div><div><div class="st">Pregnancy and Lactation Nutrition</div><div class="subtle">A safety-first section for pregnancy, post-partum, or breastfeeding support.</div></div></div>
+    <div class="value-list">
+      <p>${escapeHtml(focus)}</p>
+      <p>Use safe, well-cooked protein foods; avoid alcohol; limit high-mercury fish; avoid unpasteurised dairy; and follow antenatal or clinician guidance for supplements and medication.</p>
+      <p>Starting nutrition target in this plan: ${escapeHtml(macros.calories)} kcal and ${escapeHtml(macros.protein)} g protein, to be adjusted by trimester, appetite, weight trend, and clinical review.</p>
+    </div>
+  </div>`;
+}
+
+function sportsPerformanceSection(profile = {}, macros = {}) {
+  const sport = profile.sport || {};
+  const isRelevant = Object.keys(sport).length || profileTextIncludes(profile, ['sport', 'athlete', 'training', 'gym', 'football', 'running', 'workout']);
+  if (!isRelevant) return '';
+  const training = shortDisplay(sport.frequency || sport.trainingFrequency || profile.trainingFrequency, 'training schedule not captured');
+  return `<div class="sec"><div class="sh"><div class="si b">SP</div><div><div class="st">Sports and Athletic Performance Nutrition</div><div class="subtle">Fuel, recovery, hydration, and muscle-preservation guidance.</div></div></div>
+    <div class="support-grid">
+      <div class="info-card"><strong>Training pattern</strong><p>${escapeHtml(training)}. Use this plan as a base and adjust portions on heavy training days.</p></div>
+      <div class="info-card"><strong>Protein and recovery</strong><p>Target about ${escapeHtml(macros.protein)} g protein daily unless kidney review says otherwise. Spread protein across meals rather than taking it all at dinner.</p></div>
+      <div class="info-card"><strong>Before exercise</strong><p>Use a balanced meal 2 to 3 hours before training, or a light snack such as fruit plus yogurt/groundnuts 30 to 60 minutes before if needed.</p></div>
+      <div class="info-card"><strong>After exercise</strong><p>Within 1 to 2 hours, combine protein, fluids, and a measured carbohydrate source to support recovery and reduce overeating later.</p></div>
+    </div>
+  </div>`;
+}
+
+function vitalityHormonalSection(profile = {}, macros = {}) {
+  const vitality = profile.vitality || {};
+  const isRelevant = Object.keys(vitality).length || profileTextIncludes(profile, ['fatigue', 'low energy', 'hormonal', 'sleep', 'stamina', 'vitality']);
+  if (!isRelevant) return '';
+  return `<div class="sec"><div class="sh"><div class="si p">VIT</div><div><div class="st">Vitality and Hormonal Wellness</div><div class="subtle">Energy, sleep, stress, appetite, and recovery support.</div></div></div>
+    <div class="value-list">
+      <p>Low energy can come from low iron, low vitamin D, poor sleep, under-eating, dehydration, stress, thyroid issues, glucose swings, infection, or medication effects. Nutrition helps, but persistent fatigue deserves clinical review.</p>
+      <p>Build every main meal around protein, colourful vegetables or fruit, measured starch where needed, and water. Avoid using caffeine and sugar as the main energy strategy.</p>
+      <p>Useful labs to consider if fatigue persists: full blood count, ferritin, vitamin D, B12, thyroid function, glucose/HbA1c, and pregnancy test where relevant.</p>
+    </div>
+  </div>`;
+}
+
+function mentalMoodAppetiteSection(profile = {}) {
+  const mental = profile.mental || {};
+  const isRelevant = Object.keys(mental).length || profileTextIncludes(profile, ['stress', 'anxiety', 'mood', 'depression', 'emotional eating', 'binge', 'poor appetite']);
+  if (!isRelevant) return '';
+  return `<div class="sec"><div class="sh"><div class="si p">MOOD</div><div><div class="st">Mood, Stress and Appetite Support</div><div class="subtle">Nutrition support for real-life eating patterns.</div></div></div>
+    <div class="value-list">
+      <p>Keep meals regular enough to prevent extreme hunger, cravings, and late-day overeating. Protein at breakfast and lunch often improves appetite control.</p>
+      <p>Use magnesium-rich foods, omega-3 foods, fibre, hydration, and sleep routines as support. Nutrition is supportive care, not a replacement for mental-health treatment when needed.</p>
+      <p>If appetite is very low, use smaller meals more often: yogurt bowl, soup, eggs/beans where suitable, fruit, nuts, or a fortified porridge depending on clinical safety.</p>
+    </div>
+  </div>`;
+}
+
+function adultWellnessSection(profile = {}) {
+  const age = Number(profile.age || 0);
+  const isRelevant = age >= 55 || profileTextIncludes(profile, ['elderly', 'older adult', 'senior']);
+  if (!isRelevant) return '';
+  return `<div class="sec"><div class="sh"><div class="si r">AD</div><div><div class="st">Adult Wellness Nutrition Support</div><div class="subtle">Supportive nutrition guidance for older adults.</div></div></div>
+    <div class="value-list">
+      <p>Older adult nutrition should protect muscle, bone strength, hydration, appetite, digestion, medication safety, and steady energy.</p>
+      <p>Food priorities: protein at main meals, fish where safe, beans or lentils where tolerated, vegetables, fruit in measured portions, calcium-rich foods, fluids, and softer meals where chewing is difficult.</p>
+      <p>Sudden appetite loss, falls, weakness, swelling, confusion, severe fatigue, or unexplained weight loss should be discussed with a clinician.</p>
+    </div>
+  </div>`;
+}
+
+function exerciseMovementSection(profile = {}) {
+  const goal = String(profile.goal || '').toLowerCase();
+  const age = Number(profile.age || 0);
+  const activity = String(profile.activity || '').toLowerCase();
+  const needs = goal.includes('weight') || goal.includes('fitness') || activity || profileTextIncludes(profile, ['gym', 'exercise', 'sedentary', 'sport', 'training']);
+  if (!needs) return '';
+  const condText = JSON.stringify(profile || {}).toLowerCase();
+  const hasDiabetes = condText.includes('diabetes') || condText.includes('glucose') || condText.includes('hba1c');
+  const hasHypertension = condText.includes('hypertension') || condText.includes('blood pressure') || condText.includes('sbp') || condText.includes('dbp');
+  const isPregnancy = condText.includes('pregnan') || condText.includes('trimester') || condText.includes('lactation');
+  const lowFitness = age >= 55 || activity.includes('sedentary') || profileTextIncludes(profile, ['low fitness', 'unfit', 'older adult', 'senior']);
+  const weightFocus = goal.includes('loss') || goal.includes('weight') || goal.includes('obese') || goal.includes('overweight');
+  const intensity = lowFitness
+    ? 'Use low-impact cardio, balance work, flexibility, and supervised strength training if new to exercise.'
+    : 'Use a mixture of walking/cardio, strength training, mobility, and active rest. Increase gradually.';
+  const cards = [['Starter weekly plan', 'Walk 10 to 20 minutes on 3 to 5 days weekly. Add 5 minutes per week until the routine feels comfortable, then add gentle strength work.']];
+  if (weightFocus) cards.push(['Weight-management plan', 'Use 4 to 5 walking/cardio days plus 2 strength sessions weekly. Keep strength sessions simple: chair squats, wall push-ups, rows, hip hinges, and core bracing.']);
+  if (hasDiabetes) cards.push(['Diabetes-focused movement', 'Use a 10 to 20 minute easy walk after larger meals where possible. Avoid skipping meals around exercise if glucose-lowering medicine may cause low sugar.']);
+  if (hasHypertension) cards.push(['Blood-pressure-focused movement', 'Use moderate steady movement, warm up and cool down, breathe normally during strength work, and avoid sudden maximal effort if readings are uncontrolled.']);
+  if (isPregnancy) cards.push(['Pregnancy-focused movement', 'Use antenatal-safe walking, gentle strength, pelvic stability, hydration, and clinician guidance if bleeding, dizziness, pain, high BP, or warning symptoms occur.']);
+  if (lowFitness) cards.push(['Older adult / low-fitness plan', 'Prioritise low-impact walking, sit-to-stand practice, balance holds near support, flexibility, and light resistance 2 days weekly.']);
+  if (profileTextIncludes(profile, ['gym', 'exercise', 'sport', 'training']) || weightFocus) {
+    cards.push(['Before exercise', 'Eat a balanced meal 2 to 3 hours before training, or a small fruit/yogurt/groundnut snack 30 to 60 minutes before if needed.']);
+    cards.push(['After exercise', 'Within 1 to 2 hours, use protein plus fluid and a measured carbohydrate source if the session was long or intense.']);
+  }
+  return `<div class="sec"><div class="sh"><div class="si b">MOVE</div><div><div class="st">Movement and Exercise Guidance</div><div class="subtle">Food works better when paired with realistic movement.</div></div></div>
+    <div class="support-grid">
+      <div class="info-card"><strong>Weekly rhythm</strong><p>Start with 3 to 5 movement days weekly depending on fitness, pain, schedule, and clinician advice.</p></div>
+      <div class="info-card"><strong>Strength</strong><p>Include 2 strength sessions weekly to protect muscle, glucose control, posture, and metabolism.</p></div>
+      <div class="info-card"><strong>Cardio</strong><p>Walk, cycle, swim, dance, or use gym cardio at a pace where breathing increases but control is maintained.</p></div>
+      <div class="info-card"><strong>Safety</strong><p>${escapeHtml(intensity)} Stop and seek care for chest pain, fainting, severe breathlessness, or unusual symptoms.</p></div>
+    </div>
+    <div class="support-grid" style="margin-top:8px">${cards.map(([title, text]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+function patientPreMealExpertSections(payload = {}, profile = {}, clinicalSummary = {}, macros = {}) {
+  return [
+    foodAvoidReplacementSection(profile),
+    cycleBasedNutritionSection(profile),
+    pregnancyLactationSection(profile, macros),
+    sportsPerformanceSection(profile, macros),
+    vitalityHormonalSection(profile, macros),
+    mentalMoodAppetiteSection(profile),
+    adultWellnessSection(profile),
+    exerciseMovementSection(profile)
+  ].join('');
+}
+
+function patientValueSupportSections(payload = {}, profile = {}, clinicalSummary = {}, macros = {}) {
+  return [
+    weeklyShoppingMealPrepSection(payload, profile),
+    premiumFamilySupportSection(payload, profile),
+    practicalRecipeGuideSection(profile),
+    foodAlliesSection(profile),
+    followUpRoadmapSection(profile),
+    progressCheckpointsSection(),
+    protectiveFoodsSection(),
+    hairSkinNailsSection(macros),
+    gutHealthSection(macros),
+    weightManagementSection(profile, macros)
+  ].join('');
 }
 
 function backendPlanHtml(payload = {}, clinicalSummary = {}) {
   const profile = payload.profile && typeof payload.profile === 'object' ? payload.profile : payload;
   const macros = serverMacroSummary(profile);
-  const recipes = firstRecipesByMeal(profile);
+  const recipePlan = weeklyRecipesForProfile(profile);
+  const recipes = recipePlan.byMeal;
+  const weekPlan = recipePlan.days;
+  const weekBlocks = recipePlan.weeks && recipePlan.weeks.length ? recipePlan.weeks : [{ title: 'Week 1 - Foundation Menu', focus: 'Use this as the first rotation, then repeat with swaps and feedback.', days: weekPlan }];
   const issued = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-  const conditions = cleanList(profile.conds || payload.conds).join(', ') || 'General nutrition support';
+  const familyPlan = isFamilyPlanPayload(payload, profile);
+  const conditions = cleanList(profile.conds || payload.conds).map(conditionDisplayName).join(', ') || 'General nutrition support';
   const rows = [
     ['Name', payload.name || profile.name],
     ['Package', payload.packageName],
@@ -621,42 +2401,84 @@ function backendPlanHtml(payload = {}, clinicalSummary = {}) {
     ['Budget', profile.budget || 'Not captured'],
     ['Cooking access', profile.cooking || 'Not captured']
   ].filter(([, value]) => String(value || '').trim());
+  const bmiValue = Number(payload.bmi || profile.bmi || 0);
+  const bmiLabel = shortDisplay(profile.cat || payload.cat || 'Not captured');
+  const actualWeekMeals = { breakfast: [], lunch: [], dinner: [], snack: [] };
+  weekBlocks.forEach(week => (week.days || []).forEach(day => {
+    if (day.breakfast) actualWeekMeals.breakfast.push(day.breakfast);
+    if (day.snack1) actualWeekMeals.snack.push(day.snack1);
+    if (day.snack2) actualWeekMeals.snack.push(day.snack2);
+    if (day.lunch) actualWeekMeals.lunch.push(day.lunch);
+    if (day.dinner) actualWeekMeals.dinner.push(day.dinner);
+  }));
+  const programmePhases = [
+    ['Days 1-14', 'Learn your portions, remove sugary drinks, reduce excess oil and salt, and record meals that do not feel realistic.'],
+    ['Days 15-30', 'Improve variety, shopping rhythm, protein rotation, vegetable intake, and the meals you enjoy most.'],
+    ['Days 31-45', 'Adjust portions from measurements, appetite, symptoms, glucose/BP, or lab feedback where relevant.'],
+    ['Days 46-60', 'Maintain the best meals, replace weak meals, and request review if symptoms, hunger, or measurements worsen.']
+  ].map(([title, text]) => `<div class="phase"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div>`).join('');
+  let mealProgrammeHtml = `<div class="sec"><div class="sh"><div class="si y">MP</div><div><div class="st">${familyPlan ? 'Dietician-Style Household 30-60 Day Meal Programme' : 'Dietician-Style 30-60 Day Meal Programme'}</div><div class="subtle">Weeks 1-4 are written out. For Days 31-60, repeat the strongest meals, use the swaps, and adjust from follow-up feedback.</div></div></div>
+    <div class="why-b">Each meal card focuses on what the patient needs most: ingredients, preparation, exact food portions, taste, and practical swaps. Lunch and dinner prioritise real meals; smoothies stay as breakfast or snack options only where clinically safe.</div>
+    <div class="phase-grid" style="margin-top:10px;margin-bottom:12px">${programmePhases}</div>
+    <div class="variety-strip">${mealVarietySummary(actualWeekMeals)}</div>`;
+  weekBlocks.forEach((week, weekIndex) => {
+    mealProgrammeHtml += `<div class="week-card"><div class="week-head"><div class="week-title">${escapeHtml(week.title || `Week ${weekIndex + 1}`)}</div><div class="week-focus">${escapeHtml(week.focus || 'Rotate meals while keeping portions measured and practical.')}</div></div>`;
+    days.forEach((day, i) => {
+      const dayMeals = (week.days || [])[i] || {};
+      const planDayNumber = (weekIndex * 7) + i + 1;
+      mealProgrammeHtml += `<div class="day-block"><div class="day-title">${day} - Day ${planDayNumber}</div>`;
+      mealProgrammeHtml += recipeCardHtml(dayMeals.breakfast || pickRecipe(recipes.breakfast, i + weekIndex), 'breakfast');
+      mealProgrammeHtml += recipeCardHtml(dayMeals.snack1 || pickRecipe(recipes.snack, i + weekIndex), 'snack1');
+      mealProgrammeHtml += recipeCardHtml(dayMeals.lunch || pickRecipe(recipes.lunch, i + weekIndex), 'lunch');
+      mealProgrammeHtml += recipeCardHtml(dayMeals.snack2 || pickRecipe(recipes.snack, i + 7 + weekIndex), 'snack2');
+      mealProgrammeHtml += recipeCardHtml(dayMeals.dinner || pickRecipe(recipes.dinner, i + weekIndex), 'dinner');
+      mealProgrammeHtml += `</div>`;
+    });
+    mealProgrammeHtml += `</div>`;
+  });
+  mealProgrammeHtml += `</div>`;
   let html = `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Plan: ${escapeHtml(payload.name || profile.name || 'Client')}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0;line-height:1.65}
-    .page{max-width:880px;margin:0 auto;background:#fff;min-height:100vh}
-    .cover{background:#1e3a1a;color:#fff;padding:38px 44px}
-    .cover h1{font-family:Georgia,serif;font-size:34px;margin:0 0 8px}
-    .cover p{margin:0;color:#dbead5}.body{padding:34px 44px}
-    .sec{margin-bottom:28px}.sh{display:flex;align-items:center;gap:10px;border-bottom:2px solid #e2dbcf;padding-bottom:8px;margin-bottom:12px}
-    .si{width:30px;height:30px;border-radius:8px;background:#2f6b2b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}.si.o{background:#b85c1c}.si.r{background:#8a1010}.si.y{background:#8a6200}
-    .st{font-family:Georgia,serif;font-size:18px;font-weight:700;color:#1e3a1a}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.box{background:#faf7f1;border:1px solid #e6dccd;border-radius:8px;padding:10px}.box strong{color:#1e3a1a}
-    .macro{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.macro div{background:#ebf7e8;border-radius:8px;padding:10px;text-align:center}.macro b{display:block;font-size:20px;color:#1e3a1a}
-    .week-card{border:1px solid #e2dbcf;border-radius:10px;overflow:hidden;margin-bottom:16px}.day-title{background:#f1eadf;padding:10px 12px;font-weight:800;color:#1e3a1a}
-    .meal-card{padding:12px;border-top:1px solid #eee6dc}.meal-time{text-transform:uppercase;font-size:10px;font-weight:800;color:#8a7a68}.meal-name{font-weight:800;color:#2a1f14;margin:2px 0 6px}
-    .meal-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}.meal-chips span{font-size:10px;background:#ebf7e8;color:#1e3a1a;border-radius:999px;padding:3px 7px;font-weight:700}
-    .meal-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.meal-box{background:#fffdf8;border-left:3px solid #b85c1c;border-radius:7px;padding:8px}.meal-box strong{display:block;font-size:10px;text-transform:uppercase;color:#7a3c10}.meal-box p{font-size:12px;margin:4px 0 0}
-    .meal-note{font-size:11.5px;background:#f7f3ec;border:1px solid #e2dbcf;border-radius:7px;padding:8px;margin-top:7px}
-    .note{background:#fff8e8;border-left:4px solid #b85c1c;border-radius:8px;padding:12px}.prtbtn{text-align:center;background:#f7f3ec;padding:18px}@media print{.prtbtn{display:none}.meal-card,.week-card,.sec{page-break-inside:avoid}}@media(max-width:700px){.body,.cover{padding:24px}.grid,.macro,.meal-grid{grid-template-columns:1fr}}
-  </style></head><body><div class="page"><div class="cover"><h1>Bulamu360 Personalised Nutrition Plan</h1><p>Prepared privately by the backend plan engine for ${escapeHtml(payload.name || profile.name || 'Client')} on ${escapeHtml(issued)}.</p></div><div class="body">`;
-  html += `<div class="sec"><div class="sh"><div class="si">ID</div><div class="st">Client Snapshot</div></div><div class="grid">${rows.map(([label, value]) => `<div class="box"><strong>${escapeHtml(label)}</strong><br>${escapeHtml(value)}</div>`).join('')}</div></div>`;
-  html += `<div class="sec"><div class="sh"><div class="si o">NT</div><div class="st">Nutrition Targets</div></div><div class="macro"><div><b>${macros.calories}</b>kcal</div><div><b>${macros.protein}g</b>protein</div><div><b>${macros.carbs}g</b>carbs</div><div><b>${macros.fat}g</b>fat</div><div><b>${macros.water}L</b>water</div></div><p class="note">Targets are starting estimates and should be adjusted using appetite, weight trend, symptoms, glucose/BP/lab readings where relevant, and dietician review.</p></div>`;
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Outfit,"Segoe UI",Arial,sans-serif;background:#f7f3ec;color:#2a1f14;font-size:13px;line-height:1.7}
+    .page{max-width:820px;margin:0 auto;background:#fff;box-shadow:0 18px 55px rgba(30,58,26,.10)}
+    .cover{background:linear-gradient(160deg,#0f2009,#1a3514,#0d2a0d);padding:52px 48px;color:#fff;position:relative;overflow:hidden}
+    .orb1{position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(62,122,48,.25),transparent 65%);top:-150px;right:-100px}.orb2{position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(185,92,28,.18),transparent 65%);bottom:-80px;left:-70px}
+    .logo{display:flex;align-items:center;gap:12px;margin-bottom:36px;position:relative}.leaf{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#2d5c24,#5ea84a);display:flex;align-items:center;justify-content:center;font-size:21px}.brand{font-family:"Libre Baskerville",Georgia,serif;font-size:24px;font-weight:700;color:#fff}.brand-sub{font-size:10px;color:rgba(255,255,255,.48);letter-spacing:.12em;text-transform:uppercase;display:block;margin-top:2px}
+    .c-title{font-family:"Libre Baskerville",Georgia,serif;font-size:36px;font-weight:700;color:#fff;line-height:1.1;margin-bottom:8px;position:relative;letter-spacing:0}.c-title em{font-style:italic;color:#9dd48a}.c-sub{font-size:15px;color:rgba(255,255,255,.68);margin-bottom:26px;position:relative}
+    .c-meta{display:flex;flex-wrap:wrap;gap:18px;padding:18px;background:rgba(255,255,255,.08);border-radius:13px;border:1px solid rgba(255,255,255,.12);position:relative}.cm{min-width:120px}.cm-l{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.42);margin-bottom:3px}.cm-v{font-size:13px;font-weight:700;color:#fff}
+    .bmi-b{display:inline-flex;align-items:center;gap:10px;padding:9px 16px;background:rgba(255,255,255,.13);border-radius:100px;border:1px solid rgba(255,255,255,.2);margin-top:16px;position:relative}.bmi-n{font-family:"Libre Baskerville",Georgia,serif;font-size:24px;font-weight:700;color:#9dd48a}.bmi-t{font-size:13px;color:rgba(255,255,255,.76)}
+    .body{padding:40px 48px}.sec{margin-bottom:30px}.sh{display:flex;align-items:center;gap:10px;margin-bottom:13px;padding-bottom:8px;border-bottom:2px solid #e2dbcf}.si{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1e3a1a,#3d7a30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}.si.o{background:linear-gradient(135deg,#7a3c10,#c06820)}.si.r{background:linear-gradient(135deg,#5a0e0e,#a02020)}.si.b{background:linear-gradient(135deg,#142048,#2860b0)}.si.p{background:linear-gradient(135deg,#2e0860,#8030c0)}.si.y{background:linear-gradient(135deg,#5a4000,#b08800)}
+    .st{font-family:"Libre Baskerville",Georgia,serif;font-size:17px;font-weight:700;color:#1e3a1a}.subtle{color:#8a7a68;font-size:12px;margin-top:2px}
+    .gauge{height:11px;border-radius:6px;background:linear-gradient(90deg,#5ea84a,#e8c030,#e07030,#c02020);position:relative;margin:11px 0 6px}.gpin{position:absolute;top:-5px;width:21px;height:21px;border-radius:50%;background:#fff;border:3px solid #1e3a1a;transform:translateX(-50%);box-shadow:0 2px 6px rgba(0,0,0,.18)}.glbl{display:flex;justify-content:space-between;font-size:9px;color:#8a7a68;font-weight:700}.bmi-exp,.why-b,.note{border-radius:9px;padding:13px;font-size:13px;line-height:1.75}.bmi-exp{background:linear-gradient(135deg,#ebf7e8,#d4eecc);color:#1e3a1a;margin-top:10px}.why-b{background:linear-gradient(135deg,#fdf8f0,#ede8df);color:#2a1f14;border-left:4px solid #c06820}.note{background:linear-gradient(135deg,#fff8e8,#fde8c8);border-left:4px solid #c06820}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.box,.info-card,.recipe-mini{background:#fafdf7;border:1px solid #e2dbcf;border-radius:9px;padding:10px 12px}.box strong,.info-card strong,.recipe-mini strong{display:block;font-size:10px;color:#7a3c10;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}.box span{font-size:13px;font-weight:700;color:#2a1f14}.info-card span{display:block;font-family:"Libre Baskerville",Georgia,serif;font-size:22px;font-weight:700;color:#7a3c10;margin:3px 0}.info-card p,.recipe-mini p{font-size:11.8px;color:#5a4a38;line-height:1.6;margin-top:3px}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.two-col h3{font-size:11px;color:#1e3a1a;text-transform:uppercase;letter-spacing:.08em;margin:0 0 7px}.mini-table{display:grid;gap:6px}.mini-table div{background:#fafdf7;border:1px solid #e2dbcf;border-radius:8px;padding:8px 9px}.mini-table strong{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#7a3c10}.mini-table span{font-size:11.5px;font-weight:700}
+    .macro{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}.macro div{border-radius:8px;padding:12px;text-align:center;background:linear-gradient(135deg,#e8f5e4,#d4eecc)}.macro div:nth-child(2){background:linear-gradient(135deg,#e8eeff,#d8e8ff)}.macro div:nth-child(3){background:linear-gradient(135deg,#fdf5e6,#fde8c8)}.macro div:nth-child(4){background:linear-gradient(135deg,#feeee8,#fde0d8)}.macro div:nth-child(5){background:linear-gradient(135deg,#e8f0ff,#d0e0ff)}.macro b{display:block;font-family:"Libre Baskerville",Georgia,serif;font-size:19px;color:#1e3a1a;line-height:1}.macro span{font-size:10px;font-weight:700;color:#8a7a68;text-transform:uppercase}
+    .mg3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mac{border-radius:8px;padding:12px;text-align:center}.mac b{display:block;font-family:"Libre Baskerville",Georgia,serif;font-size:19px;color:#1e3a1a;line-height:1}.mac span{font-size:10px;font-weight:800;color:#8a7a68;text-transform:uppercase}.mc1{background:linear-gradient(135deg,#e8f5e4,#d4eecc)}.mc2{background:linear-gradient(135deg,#e8eeff,#d8e8ff)}.mc3{background:linear-gradient(135deg,#fdf5e6,#fde8c8)}.mc4{background:linear-gradient(135deg,#feeee8,#fde0d8)}.mc5{background:linear-gradient(135deg,#e8f0ff,#d0e0ff)}.mc6{background:linear-gradient(135deg,#f0e8ff,#e4d8ff)}
+    .plan-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.summary-card{background:#fafdf7;border:1px solid #e2dbcf;border-radius:9px;padding:11px;font-size:12px}.summary-card strong{color:#1e3a1a}
+    .week-card{margin-bottom:24px;border-radius:14px;border:1px solid #d8cfbf;overflow:hidden;break-inside:avoid;box-shadow:0 8px 22px rgba(30,58,26,.06)}.week-head{background:linear-gradient(135deg,#1e3a1a,#2d5c24);color:#fff;padding:14px 16px}.week-title{font-family:"Libre Baskerville",Georgia,serif;font-size:17px;font-weight:700}.week-focus{font-size:11.5px;color:rgba(255,255,255,.78);margin-top:3px}.day-block{padding:15px;border-top:1px solid rgba(30,58,26,.12);break-inside:avoid}.day-title{font-family:"Libre Baskerville",Georgia,serif;font-size:15px;font-weight:700;color:#1e3a1a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(30,58,26,.16)}
+    .meal-card{background:#fff;border:1px solid #e2dbcf;border-radius:10px;padding:11px;margin-bottom:10px;break-inside:avoid}.meal-time{font-size:10px;font-weight:800;color:#8a7a68;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}.meal-name{font-size:13.5px;font-weight:800;color:#2a1f14;line-height:1.25;margin-bottom:6px}.meal-chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 8px}.meal-chips span{font-size:9.5px;font-weight:700;color:#1e3a1a;background:#ebf7e8;border:1px solid #d4eecc;border-radius:999px;padding:3px 7px}.meal-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}.meal-box{background:#fafdf7;border-radius:7px;padding:8px;border-left:3px solid #d4b080}.meal-box.wide{grid-column:1/-1}.meal-box strong{display:block;font-size:10px;color:#7a3c10;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}.meal-box p{font-size:11.2px;color:#5a4a38;line-height:1.55;margin:0}.meal-note{font-size:10.8px;color:#5a4a38;line-height:1.5;background:#f7f3ec;border-radius:7px;padding:8px;margin-top:6px;border:1px solid #e2dbcf}
+    .variety-strip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 13px}.variety-strip span{font-size:9.5px;font-weight:700;color:#1e3a1a;background:#ebf7e8;border:1px solid #d4eecc;border-radius:999px;padding:4px 8px}.support-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.phase-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.phase{background:linear-gradient(135deg,#ebf7e8,#d4eecc);border-radius:8px;padding:11px;text-align:center}.phase strong{display:block;font-size:9px;font-weight:800;color:#2d5c24;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}.phase p{font-size:11px;color:#1e3a1a;line-height:1.5;margin:0}.value-list{display:grid;gap:7px}.value-list p{margin:0;padding:9px 11px;background:#fafdf7;border-radius:7px;border:1px solid #e2dbcf;border-left:3px solid #3d7a30;font-size:11.8px;color:#5a4a38;line-height:1.6}
+    .foot{background:linear-gradient(135deg,#0f2009,#1e3a1a);padding:28px 48px;color:#fff}.fi{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}.fb{font-family:"Libre Baskerville",Georgia,serif;font-size:17px;font-weight:700;color:#fff;margin-bottom:4px}.fc{font-size:12px;color:rgba(255,255,255,.58);line-height:1.8}.fd{font-size:10px;color:rgba(255,255,255,.36);margin-top:10px;line-height:1.65}.fr{text-align:right}.fdt{font-size:10px;color:rgba(255,255,255,.42);margin-bottom:3px}.ftag{font-family:"Libre Baskerville",Georgia,serif;font-size:12px;font-style:italic;color:rgba(255,255,255,.42)}
+    .footer-note{font-size:11px;color:#8a7a68;border-top:1px solid #e2dbcf;padding-top:12px;margin-top:14px}.prtbtn{display:block;text-align:center;padding:18px;background:#f7f3ec}
+    @media print{body{background:#fff}.page{box-shadow:none}.sec,.week-card,.day-block,.meal-card{page-break-inside:avoid}.prtbtn{display:none!important}.cover{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+    @media(max-width:700px){.meal-grid,.grid,.macro,.mg3,.support-grid,.phase-grid,.plan-summary,.two-col{grid-template-columns:1fr}.body{padding:28px 22px}.cover{padding:42px 24px}.c-title{font-size:31px}.fr{text-align:left}}
+  </style></head><body><div class="page"><div class="cover"><div class="orb1"></div><div class="orb2"></div><div class="logo"><div class="leaf">B360</div><div><div class="brand">Bulamu360</div><span class="brand-sub">by Breyer Naula, RDN</span></div></div><h1 class="c-title">Personalised<br><em>Nutrition Plan</em></h1><p class="c-sub">Prepared exclusively for ${escapeHtml(payload.name || profile.name || 'Client')}</p><div class="c-meta"><div class="cm"><div class="cm-l">Date Issued</div><div class="cm-v">${escapeHtml(issued)}</div></div><div class="cm"><div class="cm-l">Package</div><div class="cm-v">${escapeHtml(payload.packageName || 'Bulamu360 plan')}</div></div><div class="cm"><div class="cm-l">Goal</div><div class="cm-v">${escapeHtml(profile.goal || 'General Wellness')}</div></div><div class="cm"><div class="cm-l">Height / Weight</div><div class="cm-v">${escapeHtml([profile.height ? `${profile.height}cm` : '', profile.weight ? `${profile.weight}kg` : ''].filter(Boolean).join(' / ') || 'Not captured')}</div></div></div><div class="bmi-b"><span class="bmi-n">${bmiValue ? escapeHtml(bmiValue) : 'NA'}</span><span class="bmi-t">BMI &nbsp;<strong style="color:#fff">${escapeHtml(bmiLabel)}</strong></span></div></div><div class="body">`;
+  html += bmiMeaningSection(payload, profile);
+  html += `<div class="sec"><div class="sh"><div class="si o">WHY</div><div><div class="st">Why This Plan Was Selected for You</div><div class="subtle">Written for the patient, without private backend or admin notes.</div></div></div><div class="why-b">This plan was selected for ${escapeHtml(profile.goal || 'your nutrition goal')} while keeping meals practical for your budget, cooking access, appetite, culture, health needs, and routine. ${familyPlan ? "For the household plan, one shared menu base is adapted by age, appetite, activity, and each member's health needs." : 'The programme uses measured portions, protein rotation, vegetables, practical preparation, and realistic follow-up adjustments.'}</div></div>`;
   if (clinicalSummary.safetyDecision) {
     const sd = clinicalSummary.safetyDecision;
-    html += `<div class="sec"><div class="sh"><div class="si r">SF</div><div class="st">Safety Review</div></div><div class="note"><strong>${escapeHtml(sd.label || 'Safety review')}</strong><br>${escapeHtml(sd.summary || '')}${(sd.review || []).map(x => `<div>${escapeHtml(x)}</div>`).join('')}${(sd.caution || []).map(x => `<div>${escapeHtml(x)}</div>`).join('')}</div></div>`;
+    html += `<div class="sec"><div class="sh"><div class="si r">SF</div><div><div class="st">Important Safety Note</div><div class="subtle">Use this plan alongside medical care where symptoms, medication, pregnancy, diabetes, kidney disease, or abnormal labs are involved.</div></div></div><div class="note"><strong>${escapeHtml(sd.label || 'Safety review')}</strong><br>${escapeHtml(sd.summary || 'Use this plan as nutrition guidance, not emergency medical care. Seek clinical care for severe or worsening symptoms.')}</div></div>`;
   }
-  html += `<div class="sec"><div class="sh"><div class="si y">MP</div><div class="st">7-Day Meal Structure</div></div>`;
-  days.forEach((day, i) => {
-    html += `<div class="week-card"><div class="day-title">${day}</div>`;
-    html += recipeCardHtml(pickRecipe(recipes.breakfast, i));
-    html += recipeCardHtml(pickRecipe(recipes.snack, i));
-    html += recipeCardHtml(pickRecipe(recipes.lunch, i));
-    html += recipeCardHtml(pickRecipe(recipes.snack, i + 7));
-    html += recipeCardHtml(pickRecipe(recipes.dinner, i));
-    html += `</div>`;
-  });
-  html += `</div><div class="sec"><div class="sh"><div class="si">FU</div><div class="st">Follow-Up</div></div><div class="note">Use the plan for the approved period, then submit progress feedback on taste, cost, symptoms, hunger, disliked meals, repeated meals, and measurements. Severe or worsening symptoms require medical care.</div></div>`;
-  html += `</div><div class="prtbtn"><button onclick="window.print()" style="background:#1e3a1a;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:800">Print or Save as PDF</button></div></div></body></html>`;
+  html += `<div class="sec"><div class="sh"><div class="si o">NT</div><div><div class="st">Daily Nutritional Targets</div><div class="subtle">Starting targets for daily structure and follow-up review.</div></div></div><div class="mg3"><div class="mac mc1"><b>${macros.calories}</b><span>kcal/day</span></div><div class="mac mc2"><b>${macros.protein}g</b><span>protein</span></div><div class="mac mc3"><b>${macros.carbs}g</b><span>carbohydrate</span></div><div class="mac mc4"><b>${macros.fat}g</b><span>fat</span></div><div class="mac mc5"><b>${macros.water}L</b><span>water</span></div><div class="mac mc6"><b>${macros.fibre}g</b><span>fibre</span></div></div><div class="plan-summary"><div class="summary-card"><strong>How to use this plan:</strong> follow the meal rhythm, keep portions measured, and use the shopping guide to prepare realistic meals for the week.</div><div class="summary-card"><strong>Clinical note:</strong> targets should be refined using measurements, appetite, glucose/BP or lab data where relevant.</div></div></div>`;
+  html += projectedOutcomesSection(profile, macros);
+  html += mealProgrammeHtml;
+  html += patientPreMealExpertSections(payload, profile, clinicalSummary, macros);
+  html += familyPlanSectionHtml(payload, profile);
+  html += patientValueSupportSections(payload, profile, clinicalSummary, macros);
+  html += `<div class="sec"><div class="footer-note">Bulamu360 plans are personalised nutrition support documents. They do not replace medical diagnosis, emergency care, prescribed medicine, or direct care from a qualified clinician.</div></div>`;
+  html += `</div><div class="foot"><div class="fi"><div><div class="fb">Bulamu360 by Breyer Naula, RDN</div><div class="fc">Certified Registered Dietician and Nutritionist</div><div class="fc">breyernaula5@gmail.com &nbsp;|&nbsp; +256 704392545 &nbsp;|&nbsp; Uganda</div><div class="fd">All nutritional guidance is prepared as professional dietary support based on submitted information. This plan does not replace in-person medical diagnosis, emergency care, prescribed medicine, or direct care from a qualified clinician.</div></div><div class="fr"><div class="fdt">Issued: ${escapeHtml(issued)}</div><div class="ftag">Your personal nutrition coach, anytime.</div></div></div></div><div class="prtbtn"><button onclick="window.print()" style="background:linear-gradient(135deg,#1e3a1a,#3d7a30);color:#fff;border:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;box-shadow:0 6px 18px rgba(30,58,26,.3)">Print or Save as PDF</button><p style="margin-top:8px;font-size:11px;color:#8a7a68">Use your browser Print function and choose Save as PDF as the destination.</p></div></div></body></html>`;
   return html;
 }
 
@@ -724,35 +2546,47 @@ async function sendResendEmail({ to, subject, html, attachments = [] }) {
   return data;
 }
 
+async function sendCustomerOrderSubmittedEmail(order) {
+  return await sendResendEmail({
+    to: order.email,
+    subject: 'Bulamu360 payment reference received',
+    html: `<p>Hello ${escapeHtml(order.name)},</p><p>Your payment reference has been received and is pending Breyer's approval.</p><p><strong>Package:</strong> ${escapeHtml(order.packageName)}<br><strong>Amount:</strong> ${escapeHtml(order.amount)}<br><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p>`
+  });
+}
+
+async function sendOwnerOrderSubmittedEmail(order) {
+  if (!ownerEmail) throw new Error('OWNER_EMAIL is not configured.');
+  return await sendResendEmail({
+    to: ownerEmail,
+    subject: `Pending Bulamu360 order - ${order.name}`,
+    html: `<p>A new Bulamu360 order is pending approval.</p><p><strong>Name:</strong> ${escapeHtml(order.name)}<br><strong>Email:</strong> ${escapeHtml(order.email)}<br><strong>Phone:</strong> ${escapeHtml(order.phone)}<br><strong>Package:</strong> ${escapeHtml(order.packageName)}<br><strong>Amount:</strong> ${escapeHtml(order.amount)}<br><strong>Network:</strong> ${escapeHtml(order.network)}<br><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p><p><a href="${publicBaseUrl}/admin">Open admin dashboard</a></p>`
+  });
+}
+
 async function sendOrderSubmittedEmails(order) {
-  await Promise.allSettled([
-    sendResendEmail({
-      to: order.email,
-      subject: 'Bulamu360 payment reference received',
-      html: `<p>Hello ${escapeHtml(order.name)},</p><p>Your payment reference has been received and is pending Breyer's approval.</p><p><strong>Package:</strong> ${escapeHtml(order.packageName)}<br><strong>Amount:</strong> ${escapeHtml(order.amount)}<br><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p>`
-    }),
-    ownerEmail ? sendResendEmail({
-      to: ownerEmail,
-      subject: `Pending Bulamu360 order - ${order.name}`,
-      html: `<p>A new Bulamu360 order is pending approval.</p><p><strong>Name:</strong> ${escapeHtml(order.name)}<br><strong>Email:</strong> ${escapeHtml(order.email)}<br><strong>Phone:</strong> ${escapeHtml(order.phone)}<br><strong>Package:</strong> ${escapeHtml(order.packageName)}<br><strong>Amount:</strong> ${escapeHtml(order.amount)}<br><strong>Network:</strong> ${escapeHtml(order.network)}<br><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p><p><a href="${publicBaseUrl}/admin">Open admin dashboard</a></p>`
-    }) : Promise.resolve()
+  await Promise.all([
+    sendCustomerOrderSubmittedEmail(order),
+    sendOwnerOrderSubmittedEmail(order)
   ]);
 }
 
+function planAttachmentFileName(order = {}) {
+  const cleanName = String(order.name || 'Client')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'Client';
+  return `${cleanName} - Bulamu360 Plan.html`;
+}
+
 async function sendApprovalEmail(order) {
-  const safeName = String(order.name || 'Client').replace(/[^\w.-]+/g, '_').slice(0, 80) || 'Client';
-  const patientPlanHtml = planHtmlForOrder(order, { audience: 'patient' });
-  const attachmentContent = Buffer.from(patientPlanHtml, 'utf8').toString('base64');
+  const attachmentContent = Buffer.from(planHtmlForOrder(order, { audience: 'patient' }), 'utf8').toString('base64');
   const downloadUrl = `${publicBaseUrl}/plan/${order.downloadToken}`;
   return await sendResendEmail({
     to: order.email,
-    subject: `Approved: your Bulamu360 plan - ${order.packageName}`,
+    subject: `${order.name || 'Your'} Bulamu360 Plan is ready`,
     html: planEmailHtml(order, downloadUrl),
-    attachments: [{
-      filename: `${safeName} - Bulamu360 Plan.html`,
-      content: attachmentContent,
-      content_type: 'text/html'
-    }]
+    attachments: [{ filename: planAttachmentFileName(order), content: attachmentContent }]
   });
 }
 
@@ -768,14 +2602,22 @@ function appendEmailLog(orderId, entry) {
 function queueOrderEmail(order, type, task, extra = {}) {
   const orderId = order.id;
   appendEmailLog(orderId, { type, status: 'queued', ...extra });
+  logOrderEvent('email-queued', { orderId, type, to: extra.to || '' });
   setTimeout(async () => {
     try {
       const result = await task();
+      if (result && result.skipped) throw new Error(result.reason || 'Email sending was skipped.');
       appendEmailLog(orderId, {
         type,
         status: 'sent',
         id: result && result.id ? result.id : '',
         ...extra
+      });
+      logOrderEvent('email-sent', {
+        orderId,
+        type,
+        to: extra.to || '',
+        providerId: result && result.id ? result.id : ''
       });
     } catch (err) {
       appendEmailLog(orderId, {
@@ -783,6 +2625,12 @@ function queueOrderEmail(order, type, task, extra = {}) {
         status: 'failed',
         error: err.message || 'Email sending failed.',
         ...extra
+      });
+      logOrderEvent('email-failed', {
+        orderId,
+        type,
+        to: extra.to || '',
+        error: err.message || 'Email sending failed.'
       });
     }
   }, 0);
@@ -803,22 +2651,6 @@ function checklistComplete(checklist = {}) {
 }
 
 function reviewFromForm(form = {}, previous = {}) {
-  const planEdit = {
-    greeting: String(form.planGreeting || '').trim(),
-    mealNotes: String(form.planMealNotes || '').trim(),
-    ingredients: String(form.planIngredients || '').trim(),
-    preparation: String(form.planPreparation || '').trim(),
-    portions: String(form.planPortions || '').trim(),
-    swaps: String(form.planSwaps || '').trim(),
-    shopping: String(form.planShopping || '').trim(),
-    exercise: String(form.planExercise || '').trim(),
-    followup: String(form.planFollowup || '').trim(),
-    extraGuidance: String(form.planExtraGuidance || '').trim(),
-    replacements: [1, 2, 3].map(n => ({
-      find: String(form[`replaceFind${n}`] || '').trim(),
-      with: String(form[`replaceWith${n}`] || '').trim()
-    }))
-  };
   return {
     ...previous,
     clinicalNote: String(form.clinicalNote || '').trim(),
@@ -839,7 +2671,6 @@ function reviewFromForm(form = {}, previous = {}) {
     planVersion: String(form.planVersion || 'Bulamu360 HTML 2026.05').trim(),
     rulesEngineVersion: String(form.rulesEngineVersion || 'clinical-rules-2026.05').trim(),
     recipeDatabaseVersion: String(form.recipeDatabaseVersion || '').trim(),
-    planEdit,
     checklist: reviewChecklistFromForm(form),
     checklistComplete: checklistComplete(reviewChecklistFromForm(form)),
     updatedAt: new Date().toISOString()
@@ -904,7 +2735,11 @@ function stripInternalPatientSections(html = '') {
     'Clinical Decision Matrix',
     'Plan Quality Audit',
     'Clinical Targets for This Specialist Plan',
+    'Condition-Specific Nutrition Chapters',
     'Condition-Specific Clinical Chapters',
+    'Assessment Used to Build This Plan',
+    'Client Snapshot',
+    'Personalised Food Strategy',
     'Meal Selection Rationale',
     'Recipe Practicality, Taste, and Substitution Notes'
   ];
@@ -926,8 +2761,7 @@ function cleanPatientMealCardLanguage(html = '') {
   return String(html || '')
     .replace(/\s*(Diabetes|Kidney|Hypertension|Lipid|Pregnancy|Weight-loss|Higher-energy) adjustment:[^<]*?(?:\.|(?=<))/g, '')
     .replace(/\s*(Diabetes|Hypertension|Kidney|Gout|Cholesterol|BP\/kidney medication):[^<]*?(?:\.|(?=<))/g, '')
-    .replace(/<strong>Why selected:<\/strong>/g, '<strong>Food reason:</strong>')
-    .replace(/<strong>Taste profile:<\/strong>/g, '<strong>Taste:</strong>')
+    .replace(/<strong>Why selected:<\/strong>/g, '<strong>Practical note:</strong>')
     .replace(/<strong>Use this meal safely:<\/strong>/g, '<strong>Small safety note:</strong>')
     .replace(/<strong>Nutrition note:<\/strong>[^<]*(?=<\/div>)/g, '');
 }
@@ -952,7 +2786,7 @@ async function sendRejectionEmail(order) {
   await sendResendEmail({
     to: order.email,
     subject: 'Bulamu360 payment reference needs review',
-    html: `<p>Hello ${escapeHtml(order.name)},</p><p>Breyer could not approve the payment reference you submitted yet.</p><p><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p><p>${escapeHtml(order.adminNote || 'Please WhatsApp your payment SMS to +256 704 392545 for review.')}</p>`
+    html: `<p>Hello ${escapeHtml(order.name)},</p><p>Breyer could not approve the payment reference you submitted yet.</p><p><strong>Reference:</strong> ${escapeHtml(order.txRef)}</p><p>${escapeHtml(order.adminNote || 'Please WhatsApp your payment SMS to +256 704392545 for review. Payment numbers: Airtel Money +256 704392545; MTN MoMo +256 791790934.')}</p>`
   });
 }
 
@@ -1013,16 +2847,40 @@ function validateOrderPayload(payload) {
   if (!String(payload.name || '').trim()) return 'Customer name is required.';
   if (!String(payload.phone || '').trim()) return 'Phone number is required.';
   if (!String(payload.packageName || '').trim()) return 'Package is required.';
-  if (!String(payload.txRef || '').trim() || String(payload.txRef).trim().length < 6) return 'Transaction reference is required.';
+  const txCompact = String(payload.txRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (txCompact.length < 6) return 'Transaction reference is required. Copy the transaction ID/reference from the Airtel Money or MTN MoMo SMS.';
   if (!payload.profile || typeof payload.profile !== 'object') return 'Customer profile is required for private plan generation.';
   return '';
+}
+
+function logOrderEvent(event, details = {}) {
+  const safe = {
+    event,
+    at: new Date().toISOString(),
+    ...details
+  };
+  console.log('[orders]', JSON.stringify(safe));
 }
 
 async function handleCreateOrder(req, res) {
   try {
     const payload = await readRequestJson(req);
+    logOrderEvent('received', {
+      origin: req.headers.origin || '',
+      host: requestHost(req),
+      name: shortText(payload.name, 80),
+      email: shortText(payload.email || payload.to, 120),
+      phonePresent: Boolean(String(payload.phone || '').trim()),
+      packageName: shortText(payload.packageName, 120),
+      network: shortText(payload.network, 40),
+      txRefLength: String(payload.txRef || '').replace(/[^A-Z0-9]/gi, '').length,
+      hasProfile: Boolean(payload.profile && typeof payload.profile === 'object')
+    });
     const error = validateOrderPayload(payload);
-    if (error) return sendJson(res, 400, { ok: false, error });
+    if (error) {
+      logOrderEvent('validation-failed', { error });
+      return sendJson(res, 400, { ok: false, error });
+    }
     const db = readDb();
     const now = new Date().toISOString();
     const clinicalSummary = serverClinicalSummaryFromPayload(payload);
@@ -1068,10 +2926,70 @@ async function handleCreateOrder(req, res) {
     };
     db.orders.unshift(order);
     writeDb(db);
-    queueOrderEmail(order, 'order-submitted', () => sendOrderSubmittedEmails(order));
+    logOrderEvent('saved', {
+      orderId: order.id,
+      status: order.status,
+      storage: supabaseEnabled() ? 'supabase-with-local-cache' : 'local-json',
+      pendingCount: db.orders.filter(o => o.status === 'pending').length,
+      totalOrders: db.orders.length
+    });
+    queueOrderEmail(order, 'customer-order-submitted', () => sendCustomerOrderSubmittedEmail(order), { to: order.email });
+    queueOrderEmail(order, 'owner-order-submitted', () => sendOwnerOrderSubmittedEmail(order), { to: ownerEmail || 'not configured' });
+    logOrderEvent('response-sent', { orderId: order.id, status: order.status });
     sendJson(res, 200, { ok: true, orderId: order.id, status: order.status });
   } catch (error) {
+    logOrderEvent('failed', { error: error.message || 'Could not create order.' });
     sendJson(res, 500, { ok: false, error: error.message || 'Could not create order.' });
+  }
+}
+
+function validateLeadPayload(payload) {
+  const email = String(payload.email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please provide a valid email address.';
+  if (!String(payload.name || '').trim()) return 'Name is required.';
+  if (!String(payload.phone || '').trim()) return 'Phone number is required.';
+  if (!payload.consentAccepted) return 'Please agree to the Terms and Privacy Policy before getting your snapshot.';
+  return '';
+}
+
+async function handleCreateLead(req, res) {
+  try {
+    const payload = await readRequestJson(req);
+    const error = validateLeadPayload(payload);
+    if (error) return sendJson(res, 400, { ok: false, error });
+    const db = readDb();
+    const now = new Date().toISOString();
+    const email = String(payload.email || '').trim().toLowerCase();
+    const phone = String(payload.phone || '').trim();
+    const existing = db.leads.find(l => String(l.email || '').toLowerCase() === email || (phone && String(l.phone || '').trim() === phone));
+    const profile = payload.profile && typeof payload.profile === 'object' ? payload.profile : {};
+    const leadRecord = {
+      id: existing && existing.id ? existing.id : `LEAD-${randomBytes(4).toString('hex').toUpperCase()}`,
+      createdAt: existing && existing.createdAt ? existing.createdAt : now,
+      updatedAt: now,
+      status: existing && existing.status ? existing.status : 'free-assessment',
+      name: String(payload.name || '').trim(),
+      email,
+      phone,
+      goal: String(payload.goal || profile.goal || '').trim(),
+      planType: String(payload.planType || profile.plantype || '').trim(),
+      bmi: String(payload.bmi || profile.bmi || '').trim(),
+      conditions: Array.isArray(payload.conditions) ? payload.conditions : (Array.isArray(profile.conds) ? profile.conds : []),
+      customerSource: String(payload.customerSource || profile.customerSource || '').trim(),
+      referralCode: String(payload.referralCode || profile.referralCode || '').trim(),
+      consentAccepted: true,
+      consentAt: existing && existing.consentAt ? existing.consentAt : now,
+      consentVersion: String(payload.consentVersion || 'privacy-terms-2026-07').trim(),
+      marketingStage: existing && existing.marketingStage ? existing.marketingStage : 'snapshot-only',
+      paidOrderId: existing && existing.paidOrderId ? existing.paidOrderId : '',
+      profile
+    };
+    if (existing) Object.assign(existing, leadRecord);
+    else db.leads.unshift(leadRecord);
+    writeDb(db);
+    sendJson(res, 200, { ok: true, leadId: leadRecord.id, status: leadRecord.status });
+  } catch (error) {
+    sendJson(res, 500, { ok: false, error: error.message || 'Could not save assessment lead.' });
   }
 }
 
@@ -1098,6 +3016,7 @@ async function handleUnlockPlan(req, res) {
         error: 'This approval code is approved, but it is linked to a different email address. Use the same email used on the order, or ask the admin to confirm the customer email.'
       });
     }
+    const membership = memberSubscriptionStatus(order);
     sendJson(res, 200, {
       ok: true,
       order: {
@@ -1106,7 +3025,11 @@ async function handleUnlockPlan(req, res) {
         packageName: order.packageName,
         amount: order.amount,
         approvalCode: order.approvalCode,
-        downloadUrl: `/plan/${order.downloadToken}`
+        downloadUrl: `/plan/${order.downloadToken}`,
+        memberLevel: memberLevelFromPackage(order.packageName),
+        activeUntil: membership.activeUntil || '',
+        daysRemaining: membership.daysRemaining || 0,
+        renewalReminder: membership.renewalReminder || ''
       },
       htmlPlan: planHtmlForOrder(order, { audience: 'patient' })
     });
@@ -1132,7 +3055,98 @@ function emailStatusHtml(order) {
   if (latest.error) {
     return `<div class="email-status email-error"><strong>Email failed:</strong><br>${escapeHtml(shortText(latest.error, 190))}</div>`;
   }
-  return `<div class="email-status email-ok">Email sent${latest.id ? ` · ${escapeHtml(latest.id)}` : ''}</div>`;
+  return `<div class="email-status email-ok">Email sent${latest.id ? ` - ${escapeHtml(latest.id)}` : ''}</div>`;
+}
+
+function coachSignalText(value) {
+  return String(value || '').toLowerCase();
+}
+
+function coachHasAny(value, words) {
+  const text = coachSignalText(value);
+  return words.some(word => text.includes(word));
+}
+
+function buildCoachReviewQueue(db = readDb()) {
+  const byEmail = new Map();
+  const orders = Array.isArray(db.orders) ? db.orders : [];
+  const progress = Array.isArray(db.progressEntries) ? db.progressEntries : [];
+  const diary = Array.isArray(db.foodDiary) ? db.foodDiary : [];
+  function itemFor(email) {
+    const clean = String(email || '').toLowerCase().trim();
+    if (!clean) return null;
+    if (!byEmail.has(clean)) {
+      const relatedOrders = orders.filter(o => String(o.email || '').toLowerCase() === clean);
+      const latestOrder = relatedOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+      byEmail.set(clean, {
+        email: clean,
+        name: latestOrder ? latestOrder.name : '',
+        phone: latestOrder ? latestOrder.phone : '',
+        latestOrder,
+        score: 0,
+        severity: 'watch',
+        signals: [],
+        latestAt: '',
+        progressCount: 0,
+        diaryCount: 0
+      });
+    }
+    return byEmail.get(clean);
+  }
+  function addSignal(item, points, label, detail, at) {
+    if (!item) return;
+    item.score += points;
+    item.signals.push({ label, detail: shortText(detail || '', 160), points, at });
+    if (at && String(at) > String(item.latestAt || '')) item.latestAt = at;
+  }
+  for (const p of progress) {
+    const item = itemFor(p.email);
+    if (!item) continue;
+    item.name = item.name || p.name || '';
+    item.progressCount += 1;
+    if (p.createdAt && String(p.createdAt) > String(item.latestAt || '')) item.latestAt = p.createdAt;
+    if (coachHasAny(p.symptoms, ['chest pain', 'faint', 'fainting', 'blood in stool', 'severe', 'swelling', 'vomit', 'rapid weight loss'])) addSignal(item, 5, 'Clinical safety symptom', p.symptoms, p.createdAt);
+    else if (String(p.symptoms || '').trim()) addSignal(item, 2, 'Symptoms reported', p.symptoms, p.createdAt);
+    if (coachHasAny(p.energy, ['low'])) addSignal(item, 2, 'Low energy', p.energy, p.createdAt);
+    if (coachHasAny(p.hunger, ['high', 'very high'])) addSignal(item, 2, 'High hunger', p.hunger, p.createdAt);
+    if (coachHasAny(p.sleep, ['poor'])) addSignal(item, 1, 'Poor sleep', p.sleep, p.createdAt);
+    if (coachHasAny(p.mood, ['low', 'stressed'])) addSignal(item, 1, 'Mood support needed', p.mood, p.createdAt);
+    if (String(p.bloodPressure || '').match(/\b1[4-9]\d\s*\/|[2-9]\d{2}\s*\//)) addSignal(item, 3, 'Blood pressure review', p.bloodPressure, p.createdAt);
+    if (String(p.notes || '').trim()) addSignal(item, 1, 'Member note', p.notes, p.createdAt);
+  }
+  for (const d of diary) {
+    const item = itemFor(d.email);
+    if (!item) continue;
+    item.name = item.name || d.name || '';
+    item.diaryCount += 1;
+    if (d.createdAt && String(d.createdAt) > String(item.latestAt || '')) item.latestAt = d.createdAt;
+    if (coachHasAny(d.taste, ['not tasty'])) addSignal(item, 2, 'Meal not tasty', d.meal || d.dislikedRepeated, d.createdAt);
+    if (coachHasAny(d.cost, ['expensive'])) addSignal(item, 2, 'Meal too expensive', d.meal || d.portion, d.createdAt);
+    if (coachHasAny(d.symptomsAfter, ['bloat', 'reflux', 'nausea', 'headache', 'sleepy', 'pain', 'diarrhoea', 'diarrhea', 'vomit'])) addSignal(item, 3, 'Meal symptom reaction', `${d.meal || ''} - ${d.symptomsAfter || ''}`, d.createdAt);
+    if (coachHasAny(d.dislikedRepeated, ['repeat', 'boring', 'dislike', 'unrealistic', 'hard'])) addSignal(item, 2, 'Meal fit problem', d.dislikedRepeated, d.createdAt);
+    if (coachHasAny(d.replacementRequest, ['yes'])) addSignal(item, 2, 'Replacement requested', `${d.replacementRequest || ''} ${d.meal || ''}`, d.createdAt);
+  }
+  return Array.from(byEmail.values())
+    .filter(item => item.score > 0)
+    .map(item => {
+      item.severity = item.score >= 8 || item.signals.some(s => s.points >= 5) ? 'urgent' : item.score >= 4 ? 'priority' : 'watch';
+      item.signals = item.signals.sort((a, b) => b.points - a.points || String(b.at || '').localeCompare(String(a.at || ''))).slice(0, 6);
+      return item;
+    })
+    .sort((a, b) => b.score - a.score || String(b.latestAt || '').localeCompare(String(a.latestAt || '')));
+}
+
+function adminCoachQueuePage() {
+  const queue = buildCoachReviewQueue();
+  const rows = queue.map(item => {
+    const order = item.latestOrder || {};
+    const signalRows = item.signals.map(s => `<span><strong>${escapeHtml(s.label)}</strong>: ${escapeHtml(s.detail || 'Captured')} (${escapeHtml(s.points)} pts)</span>`).join('');
+    return `<tr><td><strong>${escapeHtml(item.name || 'Member')}</strong><br><small>${escapeHtml(item.email)}<br>${escapeHtml(item.phone || '')}</small></td><td><span class="tag ${escapeHtml(item.severity)}">${escapeHtml(item.severity)}</span><br><strong>${escapeHtml(item.score)}</strong> review points<br><small>Latest: ${escapeHtml(item.latestAt ? new Date(item.latestAt).toLocaleString() : '-')}</small></td><td>${escapeHtml(order.packageName || 'No paid plan captured')}<br><small>${escapeHtml(order.status || '')}</small></td><td><div class="risk-list">${signalRows}</div></td><td><a class="btn ghost" href="/admin?status=approved">Orders</a>${order.id ? ` <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Review order</a>` : ''}</td></tr>`;
+  }).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Coach Review Queue</title>
+  <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#241a10;margin:0}.wrap{max-width:1320px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.btn{display:inline-flex;background:#1e3a1a;color:#fff;text-decoration:none;border-radius:8px;padding:9px 12px;font-weight:800;margin:3px}.ghost{background:#ede8df;color:#241a10}.panel{background:#fffdf8;border:1px solid #e6dccd;border-radius:14px;overflow:auto;box-shadow:0 12px 38px #2a1f1412}table{width:100%;border-collapse:collapse;min-width:980px}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:14px;line-height:1.45}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#786855;background:#fbf8f3}.tag{display:inline-flex;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:900;text-transform:uppercase}.urgent{background:#ffe1dc;color:#8a1010}.priority{background:#fff1c7;color:#8a6200}.watch{background:#e4f5dd;color:#1e5a1a}.risk-list span{display:block;border-left:3px solid #d8cfbf;padding-left:8px;margin:5px 0}small,p{color:#6d5d4b}h1{color:#1e3a1a;margin:0 0 6px}.metric{display:inline-block;background:#fffdf8;border:1px solid #e6dccd;border-radius:12px;padding:10px 13px;margin-top:10px}</style></head>
+  <body><div class="wrap"><div class="top"><div><h1>Coach Review Queue</h1><p>Members who may need attention based on progress check-ins and food diary feedback.</p><div class="metric"><strong>${escapeHtml(queue.length)}</strong> member(s) needing review</div></div><div><a class="btn ghost" href="/admin">Back to dashboard</a><a class="btn ghost" href="/admin/coach-queue.csv">Export CSV</a></div></div>
+  <div class="panel"><table><thead><tr><th>Member</th><th>Priority</th><th>Plan</th><th>Signals</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No review signals yet.</td></tr>'}</tbody></table></div></div></body></html>`;
 }
 
 function adminDashboard(req) {
@@ -1141,33 +3155,6 @@ function adminDashboard(req) {
   const db = readDb();
   const orders = db.orders.filter(o => statusFilter === 'all' || o.status === statusFilter);
   const counts = db.orders.reduce((acc, o) => (acc[o.status] = (acc[o.status] || 0) + 1, acc), {});
-  const followups = allFollowups(db);
-  const leadCount = db.orders.filter(o => {
-    const cs = o.clinicalSummary || {};
-    const status = String(o.status || '').toLowerCase();
-    const amount = String(o.amount || '').toLowerCase();
-    const source = String(cs.customerSource || cs.customerType || '').toLowerCase();
-    return status === 'lead' || amount.includes('free') || source.includes('free');
-  }).length;
-  const coachQueueCount = followups.filter(({ followup }) => !followup.adminAdjustment || !followup.adminAdjustment.action).length;
-  const replacementCount = followups.filter(({ followup }) => {
-    return [
-      followup.requestedSubstitutions,
-      followup.dislikedFoods,
-      followup.repeatedMeals,
-      followup.hardToCookMeals,
-      followup.expensiveMeals,
-      followup.foodsCausingSymptoms
-    ].some(value => String(value || '').trim());
-  }).length;
-  const lowFitCount = followups.filter(({ followup }) => {
-    const adherence = Number(followup.adherence || 0);
-    const taste = Number(followup.tasteSatisfaction || 0);
-    const budget = Number(followup.budgetDifficulty || 0);
-    const cooking = Number(followup.cookingDifficulty || 0);
-    const availability = Number(followup.foodAvailabilityDifficulty || 0);
-    return (adherence > 0 && adherence <= 5) || (taste > 0 && taste <= 5) || budget >= 7 || cooking >= 7 || availability >= 7;
-  }).length;
   const rows = orders.map(o => {
     const cs = o.clinicalSummary || {};
     const confidence = cs.confidence && cs.confidence.level ? cs.confidence.level : 'Not captured';
@@ -1200,7 +3187,7 @@ function adminDashboard(req) {
     const auditWarnings = Array.isArray(audit.warnings) ? audit.warnings.slice(0, 2) : [];
     const auditDetail = (auditBlockers.length || auditWarnings.length)
       ? `<div class="risk-list"><strong>Audit:</strong>${auditBlockers.map(x => `<span>Blocker: ${escapeHtml(x)}</span>`).join('')}${auditWarnings.map(x => `<span>Warning: ${escapeHtml(x)}</span>`).join('')}</div>`
-      : (audit.stats ? `<small>${escapeHtml(audit.stats.uniqueMeals || 0)} unique meals · ${escapeHtml(audit.stats.weeks || 0)} weeks</small>` : '');
+      : (audit.stats ? `<small>${escapeHtml(audit.stats.uniqueMeals || 0)} unique meals - ${escapeHtml(audit.stats.weeks || 0)} weeks</small>` : '');
     const contextLine = [
       cs.diagnosis ? `Diagnosis: ${cs.diagnosis}` : '',
       cs.allergies ? `Allergies: ${cs.allergies}` : '',
@@ -1211,7 +3198,7 @@ function adminDashboard(req) {
       cs.customerType ? `Type: ${cs.customerType}` : '',
       cs.referralCode ? `Referral: ${cs.referralCode}` : ''
     ].filter(Boolean).map(x => `<small>${escapeHtml(x)}</small>`).join('<br>');
-    const reviewLine2 = review.updatedAt ? `<br><small>Admin review: ${review.checklistComplete ? 'checklist complete' : 'incomplete'} · ${new Date(review.updatedAt).toLocaleString()}</small>` : '<br><small>Admin review not started</small>';
+    const reviewLine2 = review.updatedAt ? `<br><small>Admin review: ${review.checklistComplete ? 'checklist complete' : 'incomplete'} - ${new Date(review.updatedAt).toLocaleString()}</small>` : '<br><small>Admin review not started</small>';
     return `<tr>
     <td><strong>${escapeHtml(o.name)}</strong><br><small>${escapeHtml(o.email)}<br>${escapeHtml(o.phone)}</small>${acquisitionLine ? `<br>${acquisitionLine}` : ''}</td>
     <td>${escapeHtml(o.packageName)}<br><small>${escapeHtml(o.amount)}</small><br><small><strong>${escapeHtml(orderType)}</strong></small>${clinicalLine}${waistLine}<br>${conditions.length ? `<small>Conditions: ${escapeHtml(conditions.join(', '))}</small>` : ''}${contextLine ? `<br>${contextLine}` : ''}</td>
@@ -1223,12 +3210,13 @@ function adminDashboard(req) {
     <td>${o.approvalCode ? `<code>${escapeHtml(o.approvalCode)}</code><br><a href="/plan/${escapeHtml(o.downloadToken)}" target="_blank">customer link</a>${o.followupToken ? `<br><a href="/followup/${escapeHtml(o.followupToken)}" target="_blank">follow-up link</a>` : ''}<br>${emailStatusHtml(o)}` : '<small>Not approved yet</small>'}</td>
     <td class="actions">
       <a class="btn ghost" href="/admin/orders/${o.id}/plan" target="_blank">View plan</a>
+      <a class="btn ghost" href="/admin/orders/${o.id}/content">Edit content</a>
+      <a class="btn ghost" href="/admin/orders/${o.id}/edit">Edit plan</a>
       <a class="btn ghost" href="/admin/orders/${o.id}/review">Review</a>
-      <a class="btn" href="/admin/orders/${o.id}/review?mode=plan">Edit plan</a>
-      <a class="btn ghost" href="/admin/orders/${o.id}/review?mode=html">Edit HTML file</a>
       <a class="btn ghost" href="/admin/orders/${o.id}/download">Download</a>
       ${o.status === 'pending' ? `<form method="post" action="/admin/orders/${o.id}/reject"><input name="note" placeholder="Reason for rejection"><button class="btn reject">Reject</button></form>` : ''}
       ${o.status === 'approved' ? `<form method="post" action="/admin/orders/${o.id}/resend"><button class="btn">Resend email</button></form><form method="post" action="/admin/orders/${o.id}/reminder"><select name="reviewPoint"><option>7-day check-in</option><option>14-day adherence check</option><option>30-day outcome review</option><option>60-day continuation review</option></select><button class="btn ghost">Send reminder</button></form>` : ''}
+      <a class="btn danger" href="/admin/orders/${escapeHtml(o.id)}/delete">Delete</a>
     </td>
   </tr>`;
   }).join('');
@@ -1236,24 +3224,15 @@ function adminDashboard(req) {
     PENDING_COUNT: counts.pending || 0,
     APPROVED_COUNT: counts.approved || 0,
     REJECTED_COUNT: counts.rejected || 0,
-    LEAD_COUNT: leadCount,
-    LEADS_COUNT: leadCount,
-    FREE_LEAD_COUNT: leadCount,
-    FREE_LEADS_COUNT: leadCount,
-    COACH_QUEUE_COUNT: coachQueueCount,
-    COACH_COUNT: coachQueueCount,
-    REPLACEMENT_COUNT: replacementCount,
-    REPLACEMENTS_COUNT: replacementCount,
-    MEAL_SWAP_COUNT: replacementCount,
-    MEAL_SWAPS_COUNT: replacementCount,
-    LOW_FIT_COUNT: lowFitCount,
-    LOW_FIT_SCORE_COUNT: lowFitCount,
-    LOW_FIT_SCORES_COUNT: lowFitCount,
+    LEAD_COUNT: (db.leads || []).length,
+    COACH_QUEUE_COUNT: buildCoachReviewQueue(db).length,
+    REPLACEMENT_QUEUE_COUNT: buildRecipeReplacementQueue(db).length,
+    LOW_FIT_COUNT: buildPlanFitQueue(db).filter(row => row.fit.score < 65).length,
     ROWS_HTML: rows || '<tr class="empty-row"><td colspan="9">No orders yet.</td></tr>'
   });
   return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Admin Dashboard</title>
   <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1480px;margin:0 auto;padding:28px}header{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:20px}.tabs a{display:inline-block;padding:9px 13px;background:#fff;border-radius:999px;text-decoration:none;color:#1e3a1a;margin-right:6px;border:1px solid #e2dbcf}.panel{background:#fff;border-radius:18px;box-shadow:0 10px 35px #0001;overflow:auto}table{width:100%;border-collapse:collapse;min-width:1320px}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:14px}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;background:#fbf8f3}.badge{padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700}.pending{background:#fff1c7;color:#8a6200}.approved{background:#dff3d8;color:#1e3a1a}.rejected{background:#ffe1dc;color:#8a1010}.btn{display:inline-block;border:0;background:#1e3a1a;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none;font-weight:700;cursor:pointer;margin:3px 0}.ghost{background:#ede8df;color:#2a1f14}.approve{background:#1e3a1a}.reject{background:#8a1010}.actions form{margin:6px 0}.actions input{display:block;width:220px;max-width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-bottom:4px}small{color:#6c5b49}code{background:#f1eadf;padding:4px 6px;border-radius:6px}.email-status{margin-top:8px;border-radius:8px;padding:8px;font-size:11px;line-height:1.35;font-weight:700}.email-error{background:#ffe1dc;color:#8a1010}.email-ok{background:#e4f5dd;color:#1e3a1a}.email-queued{background:#fff1c7;color:#8a6200}.safety{border-radius:9px;padding:8px 10px;font-size:12px;font-weight:800;margin-bottom:7px}.safety.safe{background:#e4f5dd;color:#1e3a1a}.safety.caution{background:#fff1c7;color:#8a6200}.safety.review{background:#ffe1dc;color:#8a1010}.safety.not-captured{background:#eee6dc;color:#6c5b49}.risk-list{font-size:11.5px;line-height:1.45;margin-top:6px}.risk-list span{display:block;border-left:3px solid #d8cfbf;padding-left:7px;margin-top:4px}.chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{background:#f1eadf;border:1px solid #e2dbcf;border-radius:999px;padding:5px 8px;font-size:11px;color:#2a1f14}</style></head>
-  <body><div class="wrap"><header><div><h1>Bulamu360 Orders</h1><p>Pending: ${counts.pending || 0} · Approved: ${counts.approved || 0} · Rejected: ${counts.rejected || 0}</p></div><div><a class="btn ghost" href="/admin/insights">Insights</a> <a class="btn ghost" href="/admin/orders.csv">Export CSV</a> <a class="btn ghost" href="/admin/logout">Logout</a></div></header>
+  <body><div class="wrap"><header><div><h1>Bulamu360 Orders</h1><p>Pending: ${counts.pending || 0} - Approved: ${counts.approved || 0} - Rejected: ${counts.rejected || 0}</p></div><div><a class="btn ghost" href="/admin/insights">Insights</a> <a class="btn ghost" href="/admin/orders.csv">Export CSV</a> <a class="btn ghost" href="/admin/logout">Logout</a></div></header>
   <div class="tabs"><a href="/admin">All</a><a href="/admin?status=pending">Pending</a><a href="/admin?status=approved">Approved</a><a href="/admin?status=rejected">Rejected</a><a href="/admin/followups">Progress follow-ups</a><a href="/admin/insights">Insights</a></div>
   <div class="panel"><table><thead><tr><th>Customer</th><th>Plan</th><th>Payment</th><th>Clinical Safety</th><th>Quality Audit</th><th>Chapters</th><th>Status</th><th>Access</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No orders yet.</td></tr>'}</tbody></table></div></div></body></html>`;
 }
@@ -1261,6 +3240,7 @@ function adminDashboard(req) {
 function adminSystemPage() {
   const db = readDb();
   const counts = db.orders.reduce((acc, o) => (acc[o.status] = (acc[o.status] || 0) + 1, acc), {});
+  const audit = auditSummary(db);
   const rows = [
     ['App version', appVersion],
     ['Storage mode', supabaseEnabled() ? 'Supabase' : 'Local JSON'],
@@ -1274,14 +3254,48 @@ function adminSystemPage() {
     ['Total orders', db.orders.length],
     ['Pending orders', counts.pending || 0],
     ['Approved orders', counts.approved || 0],
-    ['Rejected orders', counts.rejected || 0]
+    ['Rejected orders', counts.rejected || 0],
+    ['Audit log entries', audit.count],
+    ['Recent sensitive admin actions', audit.recentSensitiveActions],
+    ['Latest admin action', audit.latest ? `${audit.latest.action} at ${audit.latest.at}` : 'None yet'],
+    ['Active admin sessions', sessions.size],
+    ['Security headers', 'Enabled'],
+    ['Admin same-origin POST guard', 'Enabled'],
+    ['Private source/static file block', 'Enabled']
   ];
   return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 System Status</title>
   <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:900px;margin:0 auto;padding:28px}.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 35px #0001}.btn{display:inline-block;background:#ede8df;color:#2a1f14;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{text-align:left;border-bottom:1px solid #eee6dc;padding:12px;vertical-align:top}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68}code{background:#f1eadf;padding:3px 6px;border-radius:6px}.warn{background:#fff1c7;border-left:4px solid #c06820;padding:12px 14px;border-radius:10px;margin:14px 0}.ok{background:#e4f5dd;border-left:4px solid #1e3a1a;padding:12px 14px;border-radius:10px;margin:14px 0}</style></head>
-  <body><div class="wrap"><p><a class="btn" href="/admin">Back to dashboard</a></p><div class="card"><h1>System Status</h1>
+  <body><div class="wrap"><p><a class="btn" href="/admin">Back to dashboard</a> <a class="btn" href="/admin/audit">Audit log</a> <a class="btn" href="/admin/backup.json">Download backup</a></p><div class="card"><h1>System Status</h1>
   ${supabaseEnabled() ? '<div class="ok">Orders are configured to sync to Supabase.</div>' : '<div class="warn">Orders are using local JSON. This is acceptable for development only, not for the live public app.</div>'}
   <table><thead><tr><th>Setting</th><th>Status</th></tr></thead><tbody>${rows.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td><code>${escapeHtml(v)}</code></td></tr>`).join('')}</tbody></table>
   <p style="color:#6c5b49;font-size:13px">Secret values are intentionally hidden. This page only shows whether each setting is configured.</p></div></div></body></html>`;
+}
+
+function adminAuditPage() {
+  const db = readDb();
+  const rows = (Array.isArray(db.auditLog) ? db.auditLog : []).slice(0, 250).map(entry => `<tr>
+    <td><strong>${escapeHtml(entry.action || '')}</strong><br><small>${escapeHtml(entry.at || '')}</small></td>
+    <td>${escapeHtml(entry.ip || '')}<br><small>${escapeHtml(shortText(entry.userAgent || '', 120))}</small></td>
+    <td><code>${escapeHtml(entry.path || '')}</code></td>
+    <td><pre>${escapeHtml(JSON.stringify(entry.details || {}, null, 2))}</pre></td>
+  </tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Audit Log</title>
+  <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1280px;margin:0 auto;padding:28px}.btn{display:inline-block;background:#ede8df;color:#2a1f14;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800}.panel{background:#fff;border-radius:16px;box-shadow:0 10px 35px #0001;overflow:auto;margin-top:14px}table{width:100%;border-collapse:collapse;min-width:1050px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #eee6dc;padding:12px;font-size:13px}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;background:#fbf8f3}small{color:#6c5b49}code{background:#f1eadf;padding:3px 6px;border-radius:6px}pre{white-space:pre-wrap;margin:0;font:12px Consolas,monospace;background:#faf7f1;border:1px solid #eee6dc;border-radius:8px;padding:8px;max-width:520px}</style></head>
+  <body><div class="wrap"><p><a class="btn" href="/admin">Back to dashboard</a> <a class="btn" href="/admin/system">System status</a></p><h1>Audit Log</h1><p>Recent admin-sensitive activity. Secret fields are redacted.</p><div class="panel"><table><thead><tr><th>Action</th><th>Source</th><th>Path</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No audit events yet.</td></tr>'}</tbody></table></div></div></body></html>`;
+}
+
+function exportBackupJson(res) {
+  const db = readDb();
+  res.writeHead(200, securityHeaders({
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Disposition': `attachment; filename="bulamu360-backup-${new Date().toISOString().slice(0, 10)}.json"`
+  }));
+  res.end(JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    app: 'Bulamu360',
+    version: appVersion,
+    data: db
+  }, null, 2));
 }
 
 function buildInsights(db = readDb()) {
@@ -1396,7 +3410,7 @@ function adminInsightsPage() {
   <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1380px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.btn{display:inline-block;border:0;background:#1e3a1a;color:#fff;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800}.ghost{background:#ede8df;color:#2a1f14}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 10px 35px #0001}.metric b{display:block;font-size:27px;color:#1e3a1a}.metric span,.muted{color:#6c5b49;font-size:13px}.barrow{margin:13px 0}.barrow div:first-child{display:flex;justify-content:space-between;gap:12px;font-size:13px}.bar{height:9px;background:#eee6dc;border-radius:999px;overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;background:#c06820;border-radius:999px}.rec li{margin:9px 0;line-height:1.45}.score{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.score div{background:#faf7f1;border:1px solid #e2dbcf;border-radius:12px;padding:12px}.score b{display:block;font-size:22px;color:#1e3a1a}@media(max-width:900px){.grid,.two,.score{grid-template-columns:1fr}}</style></head>
   <body><div class="wrap"><div class="top"><div><h1>Bulamu360 Insights</h1><p>Operational, clinical, recipe, and follow-up intelligence from captured orders.</p></div><div><a class="btn ghost" href="/admin">Back to orders</a> <a class="btn ghost" href="/admin/followups">Follow-ups</a> <a class="btn ghost" href="/admin/recipes">Recipe intelligence</a> <a class="btn ghost" href="/admin/insights.csv">Export insights CSV</a></div></div>
   <div class="grid">
-    <div class="card metric"><b>${data.orders.length}</b><span>Total orders</span><p class="muted">Approved ${approved} · Pending ${pending} · Rejected ${rejected}</p></div>
+    <div class="card metric"><b>${data.orders.length}</b><span>Total orders</span><p class="muted">Approved ${approved} - Pending ${pending} - Rejected ${rejected}</p></div>
     <div class="card metric"><b>${data.followups.length}</b><span>Follow-up submissions</span><p class="muted">Shows real-world adherence and practicality.</p></div>
     <div class="card metric"><b>UGX ${Math.round(data.revenueVerified || data.revenueExpected).toLocaleString()}</b><span>${data.revenueVerified ? 'Verified revenue tracked' : 'Expected revenue tracked'}</span><p class="muted">From order/payment records.</p></div>
     <div class="card metric"><b>${data.clinicianReferral + data.redFlagOrders}</b><span>Clinical escalation signals</span><p class="muted">Referral recommendations plus red-flag orders.</p></div>
@@ -1619,15 +3633,574 @@ function exportRecipeIntelligenceCsv(res) {
   res.end([header.join(','), ...rows.map(row => header.map(k => csvEscape(row[k])).join(','))].join('\n'));
 }
 
+function adminReplacementQueuePage() {
+  const rows = buildRecipeReplacementQueue();
+  const tableRows = rows.map(row => {
+    const suggestions = row.suggestions.length
+      ? row.suggestions.map(s => `<div class="suggestion"><strong>${escapeHtml(s.name)}</strong><br><small>${escapeHtml(s.meal || '')}</small><p>${escapeHtml(shortText(s.why, 140))}</p><p><b>Portion:</b> ${escapeHtml(shortText(s.portion, 140))}</p><p><b>Swap:</b> ${escapeHtml(shortText(s.smartSwap, 120))}</p></div>`).join('')
+      : '<span class="muted">Needs manual review.</span>';
+    return `<tr><td><strong>${escapeHtml(row.name || 'Member')}</strong><br><small>${escapeHtml(row.email)}<br>${escapeHtml(row.createdAt ? new Date(row.createdAt).toLocaleString() : '')}</small></td><td><strong>${escapeHtml(row.mealTime || 'Meal')}</strong><br>${escapeHtml(shortText(row.meal || '-', 150))}</td><td>${escapeHtml(shortText(row.issue || 'Replacement requested', 220))}</td><td>${suggestions}</td></tr>`;
+  }).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Meal Replacement Queue</title>
+  <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#241a10;margin:0}.wrap{max-width:1380px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.btn{display:inline-flex;background:#1e3a1a;color:#fff;text-decoration:none;border-radius:8px;padding:9px 12px;font-weight:800;margin:3px}.ghost{background:#ede8df;color:#241a10}.panel{background:#fffdf8;border:1px solid #e6dccd;border-radius:14px;overflow:auto;box-shadow:0 12px 38px #2a1f1412}table{width:100%;border-collapse:collapse;min-width:1080px}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:14px;line-height:1.45}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#786855;background:#fbf8f3}.suggestion{background:#faf7ef;border:1px solid #e6dccd;border-radius:12px;padding:11px;margin:6px 0}.suggestion strong,h1{color:#1e3a1a}.suggestion p{margin:5px 0;color:#6d5d4b;font-size:13px}.muted,small,p{color:#6d5d4b}.metric{display:inline-block;background:#fffdf8;border:1px solid #e6dccd;border-radius:12px;padding:10px 13px;margin-top:10px}</style></head>
+  <body><div class="wrap"><div class="top"><div><h1>Meal Replacement Queue</h1><p>Customer food diary complaints matched with practical replacement ideas from the Bulamu360 recipe database.</p><div class="metric"><strong>${escapeHtml(rows.length)}</strong> replacement request(s)</div></div><div><a class="btn ghost" href="/admin">Back to dashboard</a><a class="btn ghost" href="/admin/recipes">Recipe intelligence</a><a class="btn ghost" href="/admin/replacements.csv">Export CSV</a></div></div>
+  <div class="panel"><table><thead><tr><th>Member</th><th>Reported meal</th><th>Issue</th><th>Suggested replacements</th></tr></thead><tbody>${tableRows || '<tr><td colspan="4" class="muted">No replacement requests yet.</td></tr>'}</tbody></table></div></div></body></html>`;
+}
+
+function exportReplacementQueueCsv(res) {
+  const rows = buildRecipeReplacementQueue();
+  const header = ['id','createdAt','email','name','mealTime','meal','issue','suggestion1','suggestion2','suggestion3'];
+  const csvRows = rows.map(row => {
+    const values = {
+      id: row.id,
+      createdAt: row.createdAt,
+      email: row.email,
+      name: row.name,
+      mealTime: row.mealTime,
+      meal: row.meal,
+      issue: row.issue,
+      suggestion1: row.suggestions[0] ? `${row.suggestions[0].name} - ${row.suggestions[0].portion}` : '',
+      suggestion2: row.suggestions[1] ? `${row.suggestions[1].name} - ${row.suggestions[1].portion}` : '',
+      suggestion3: row.suggestions[2] ? `${row.suggestions[2].name} - ${row.suggestions[2].portion}` : ''
+    };
+    return header.map(k => csvEscape(values[k])).join(',');
+  });
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-meal-replacement-queue.csv"'
+  });
+  res.end([header.join(','), ...csvRows].join('\n'));
+}
+
+function adminPlanFitPage() {
+  const rows = buildPlanFitQueue();
+  const tableRows = rows.map(row => `<tr><td><strong>${escapeHtml(row.name || 'Member')}</strong><br><small>${escapeHtml(row.email)}<br>${escapeHtml(row.phone || '')}</small></td><td><strong>${escapeHtml(row.packageName || 'No paid plan captured')}</strong><br><small>${escapeHtml(row.status || '')}</small></td><td><span class="tag ${escapeHtml(row.fit.cls)}">${escapeHtml(row.fit.score)}% - ${escapeHtml(row.fit.label)}</span><br><small>${escapeHtml(row.fit.diaryCount)} diary / ${escapeHtml(row.fit.progressCount)} progress / ${escapeHtml(row.fit.replacementCount)} replacements</small></td><td>${row.fit.needs.map(n => `<span>${escapeHtml(n)}</span>`).join('')}</td><td>${row.fit.strengths.map(s => `<span>${escapeHtml(s)}</span>`).join('') || '<span>No strengths captured yet.</span>'}</td></tr>`).join('');
+  const priority = rows.filter(row => row.fit.score < 65).length;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Plan Fit Scores</title>
+  <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#241a10;margin:0}.wrap{max-width:1380px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.btn{display:inline-flex;background:#1e3a1a;color:#fff;text-decoration:none;border-radius:8px;padding:9px 12px;font-weight:800;margin:3px}.ghost{background:#ede8df;color:#241a10}.panel{background:#fffdf8;border:1px solid #e6dccd;border-radius:14px;overflow:auto;box-shadow:0 12px 38px #2a1f1412}table{width:100%;border-collapse:collapse;min-width:1080px}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:14px;line-height:1.45}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#786855;background:#fbf8f3}.tag{display:inline-flex;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:900;text-transform:uppercase}.approved{background:#dff3d8;color:#1e5a1a}.pending{background:#fff1c7;color:#8a6200}.rejected{background:#ffe1dc;color:#8a1010}.signals span{display:block;border-left:3px solid #d8cfbf;padding-left:8px;margin:5px 0}.muted,small,p{color:#6d5d4b}h1{color:#1e3a1a;margin:0 0 6px}.metric{display:inline-block;background:#fffdf8;border:1px solid #e6dccd;border-radius:12px;padding:10px 13px;margin-top:10px;margin-right:8px}</style></head>
+  <body><div class="wrap"><div class="top"><div><h1>Plan Fit Scores</h1><p>A gentle adherence and fit view based on progress check-ins, food diary entries, symptoms, hunger, taste, cost, and replacement requests.</p><div class="metric"><strong>${escapeHtml(rows.length)}</strong> tracked member(s)</div><div class="metric"><strong>${escapeHtml(priority)}</strong> needing review</div></div><div><a class="btn ghost" href="/admin">Back to dashboard</a><a class="btn ghost" href="/admin/coach-queue">Coach queue</a><a class="btn ghost" href="/admin/plan-fit.csv">Export CSV</a></div></div>
+  <div class="panel"><table><thead><tr><th>Member</th><th>Plan</th><th>Fit score</th><th>Needs</th><th>Strengths</th></tr></thead><tbody>${tableRows || '<tr><td colspan="5" class="muted">No member tracking entries yet.</td></tr>'}</tbody></table></div></div></body></html>`;
+}
+
+function exportPlanFitCsv(res) {
+  const rows = buildPlanFitQueue();
+  const header = ['email','name','phone','packageName','status','score','label','diaryCount','progressCount','replacementCount','needs','strengths','latestAt'];
+  const csvRows = rows.map(row => {
+    const values = {
+      email: row.email,
+      name: row.name,
+      phone: row.phone,
+      packageName: row.packageName,
+      status: row.status,
+      score: row.fit.score,
+      label: row.fit.label,
+      diaryCount: row.fit.diaryCount,
+      progressCount: row.fit.progressCount,
+      replacementCount: row.fit.replacementCount,
+      needs: row.fit.needs.join(' | '),
+      strengths: row.fit.strengths.join(' | '),
+      latestAt: row.fit.latestAt
+    };
+    return header.map(k => csvEscape(values[k])).join(',');
+  });
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-plan-fit-scores.csv"'
+  });
+  res.end([header.join(','), ...csvRows].join('\n'));
+}
+
 async function handleAdminLogin(req, res) {
   if (!rateLimit(req, res, 'admin-login', { limit: 8, windowMs: 60_000 })) return;
   const form = await readForm(req);
   if (!constantTimeEqual(form.password || '', adminPassword)) return sendHtml(res, 401, adminLoginPage('Incorrect password.'));
   const sid = randomUUID();
   sessions.set(sid, { createdAt: Date.now(), expires: Date.now() + 1000 * 60 * 60 * 12 });
+  const db = readDb();
+  auditAdminAction(db, req, 'admin-login', { result: 'success' });
+  writeDb(db);
   res.writeHead(302, securityHeaders({
     Location: '/admin',
     'Set-Cookie': adminSessionCookie(sid)
+  }));
+  res.end();
+}
+
+function memberLoginPage(message = '') {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bulamu360 Member Login</title>
+  <style>body{margin:0;font-family:Arial,sans-serif;background:#f7f3ec;color:#241a10}.wrap{min-height:100vh;display:grid;place-items:center;padding:24px}.card{width:min(520px,100%);background:#fffdf8;border:1px solid #e6dccd;border-radius:22px;padding:30px;box-shadow:0 24px 70px #2a1f1418}.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#b85c1c;font-weight:800}h1{margin:8px 0 10px;color:#1e3a1a;font-size:34px;line-height:1.05}p{color:#6d5d4b;line-height:1.55}label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#6d5d4b;font-weight:800;margin:16px 0 6px}input{width:100%;box-sizing:border-box;border:1px solid #ddd2c2;border-radius:12px;padding:13px;font-size:15px;background:#fff}button,.btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:#1e3a1a;color:#fff;border-radius:999px;padding:13px 18px;font-weight:800;cursor:pointer;text-decoration:none;margin-top:18px}.ghost{background:#ede8df;color:#241a10;margin-left:8px}.msg{background:#ffe1dc;color:#8a1010;border-left:4px solid #8a1010;padding:11px;border-radius:10px;margin:12px 0}.hint{font-size:12px;color:#6d5d4b;background:#f7f3ec;border-radius:12px;padding:12px;margin-top:14px}</style></head>
+  <body><div class="wrap"><form class="card" method="post" action="/member/login"><div class="eyebrow">Bulamu360 Members</div><h1>Your Nutrition Portal</h1><p>Use the email from your assessment plus your payment reference or approval code to view plan status, saved plans, and active Advanced membership tools.</p>${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
+  <label>Email used for your assessment</label><input type="email" name="email" required placeholder="your@email.com">
+  <label>Payment reference or approval code</label><input type="text" name="code" required placeholder="MTN/Airtel reference or BUL code">
+  <button type="submit">Open My Portal</button><a class="btn ghost" href="/">Back to Bulamu360</a>
+  <div class="hint">If your payment is still pending, use the transaction reference you submitted. If your Advanced Nutrition Program is approved, your premium tool access stays active for 35 days, then renews monthly when you pay again.</div>
+  </form></div></body></html>`;
+}
+
+function memberLevelFromPackage(packageName = '') {
+  const name = String(packageName || '').toLowerCase();
+  if (name.includes('advanced') || name.includes('program') || name.includes('200')) return 'advanced';
+  if (name.includes('specialist') || name.includes('clinical') || name.includes('120')) return 'specialist';
+  if (name.includes('personal') || name.includes('household') || name.includes('family') || name.includes('70')) return 'personal';
+  return 'free';
+}
+
+const ADVANCED_MEMBER_DAYS = 35;
+
+function memberDateLabel(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-UG', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function memberCycleInfo(order) {
+  const approvedAt = order && order.approvedAt ? Date.parse(order.approvedAt) : 0;
+  if (!approvedAt) return { approvedAt: '', expiresAt: '', activeUntil: '', daysRemaining: 0, active: false };
+  const expiresAtMs = approvedAt + ADVANCED_MEMBER_DAYS * 86400000;
+  const daysRemaining = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 86400000));
+  return {
+    approvedAt: new Date(approvedAt).toISOString(),
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    activeUntil: memberDateLabel(expiresAtMs),
+    daysRemaining,
+    active: Date.now() <= expiresAtMs
+  };
+}
+
+function memberSubscriptionStatus(order) {
+  if (!order) return { label: 'No paid plan yet', cls: 'pending', detail: 'Complete payment verification to activate your member plan.', active: false, daysRemaining: 0 };
+  if (order.status === 'pending') return { label: 'Awaiting approval', cls: 'pending', detail: 'Your payment reference is waiting for review.', active: false, daysRemaining: 0 };
+  if (order.status === 'rejected') return { label: 'Needs attention', cls: 'rejected', detail: order.adminNote || 'Your payment reference was not approved.', active: false, daysRemaining: 0 };
+  const cycle = memberCycleInfo(order);
+  const level = memberLevelFromPackage(order.packageName);
+  if (order.status === 'approved' && cycle.active) {
+    const reminder = cycle.daysRemaining <= 7
+      ? ` Renewal reminder: ${cycle.daysRemaining} day(s) left. Renew before expiry to keep premium tools open.`
+      : '';
+    const planLabel = level === 'advanced' ? 'Advanced access' : 'Plan access';
+    return {
+      label: 'Active',
+      cls: 'approved',
+      detail: `${planLabel} is active until ${cycle.activeUntil}.${reminder}`,
+      active: true,
+      activeUntil: cycle.activeUntil,
+      expiresAt: cycle.expiresAt,
+      daysRemaining: cycle.daysRemaining,
+      renewalReminder: reminder.trim()
+    };
+  }
+  if (order.status === 'approved') {
+    const ended = cycle.activeUntil ? ` Your last access ended on ${cycle.activeUntil}.` : '';
+    return {
+      label: 'Renewal due',
+      cls: 'pending',
+      detail: `${ended} Renew Advanced monthly for premium tools, updated guidance, and follow-up support.`.trim(),
+      active: false,
+      activeUntil: cycle.activeUntil,
+      expiresAt: cycle.expiresAt,
+      daysRemaining: 0,
+      renewalReminder: 'Renew your Advanced membership to reopen premium tools.'
+    };
+  }
+  return { label: order.status || 'Unknown', cls: 'pending', detail: 'Status is being reviewed.', active: false, daysRemaining: 0 };
+}
+
+function memberAccessStatus(req) {
+  const session = getMemberSession(req);
+  if (!session) {
+    return {
+      ok: true,
+      loggedIn: false,
+      active: false,
+      level: 'free',
+      statusLabel: 'Not logged in',
+      detail: 'Log in to your member portal to unlock paid tools.'
+    };
+  }
+  const db = readDb();
+  const email = String(session.email || '').toLowerCase();
+  const approvedOrders = db.orders
+    .filter(o => String(o.email || '').toLowerCase() === email && o.status === 'approved')
+    .sort((a, b) => String(b.approvedAt || b.createdAt || '').localeCompare(String(a.approvedAt || a.createdAt || '')));
+  const activeOrder = approvedOrders.find(o => memberSubscriptionStatus(o).active) || null;
+  const latest = activeOrder || latestMemberOrder(db, email);
+  const sub = memberSubscriptionStatus(latest);
+  return {
+    ok: true,
+    loggedIn: true,
+    active: Boolean(activeOrder),
+    email,
+    name: session.name || latest?.name || '',
+    level: activeOrder ? memberLevelFromPackage(activeOrder.packageName) : 'free',
+    packageName: activeOrder?.packageName || latest?.packageName || '',
+    orderId: activeOrder?.id || latest?.id || '',
+    statusLabel: activeOrder ? 'Active' : sub.label,
+    detail: activeOrder ? memberSubscriptionStatus(activeOrder).detail : sub.detail,
+    approvedAt: activeOrder?.approvedAt || '',
+    activeUntil: sub.activeUntil || '',
+    expiresAt: sub.expiresAt || '',
+    daysRemaining: sub.daysRemaining || 0,
+    renewalReminder: sub.renewalReminder || '',
+    renewalDue: sub.label === 'Renewal due'
+  };
+}
+
+function latestMemberOrder(db, email) {
+  return db.orders
+    .filter(o => String(o.email || '').toLowerCase() === String(email || '').toLowerCase())
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+}
+
+function toShortFormText(value, max = 700) {
+  return shortText(String(value || '').trim(), max);
+}
+
+async function handleMemberProgress(req, res, session) {
+  const form = await readForm(req);
+  const db = readDb();
+  const email = String(session.email || '').toLowerCase();
+  const order = latestMemberOrder(db, email);
+  const entry = {
+    id: `mp_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`,
+    createdAt: new Date().toISOString(),
+    email,
+    name: session.name || (order && order.name) || '',
+    orderId: order ? order.id : '',
+    weight: toShortFormText(form.weight, 40),
+    waist: toShortFormText(form.waist, 40),
+    bloodPressure: toShortFormText(form.bloodPressure, 80),
+    bloodSugar: toShortFormText(form.bloodSugar, 80),
+    hunger: toShortFormText(form.hunger, 40),
+    mood: toShortFormText(form.mood, 40),
+    energy: toShortFormText(form.energy, 40),
+    sleep: toShortFormText(form.sleep, 40),
+    cravings: toShortFormText(form.cravings, 140),
+    bowelHabits: toShortFormText(form.bowelHabits, 140),
+    symptoms: toShortFormText(form.symptoms, 240),
+    cyclePregnancyNotes: toShortFormText(form.cyclePregnancyNotes, 240),
+    notes: toShortFormText(form.notes, 500)
+  };
+  db.progressEntries.unshift(entry);
+  db.progressEntries = db.progressEntries.slice(0, 5000);
+  writeDb(db);
+  redirect(res, '/member?saved=progress');
+}
+
+async function handleMemberFoodDiary(req, res, session) {
+  const form = await readForm(req);
+  const db = readDb();
+  const email = String(session.email || '').toLowerCase();
+  const order = latestMemberOrder(db, email);
+  const entry = {
+    id: `fd_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`,
+    createdAt: new Date().toISOString(),
+    email,
+    name: session.name || (order && order.name) || '',
+    orderId: order ? order.id : '',
+    mealTime: toShortFormText(form.mealTime, 40),
+    meal: toShortFormText(form.meal, 500),
+    portion: toShortFormText(form.portion, 240),
+    hungerBefore: toShortFormText(form.hungerBefore, 40),
+    fullnessAfter: toShortFormText(form.fullnessAfter, 40),
+    taste: toShortFormText(form.taste, 40),
+    cost: toShortFormText(form.cost, 40),
+    symptomsAfter: toShortFormText(form.symptomsAfter, 240),
+    dislikedRepeated: toShortFormText(form.dislikedRepeated, 240),
+    replacementRequest: toShortFormText(form.replacementRequest, 240)
+  };
+  db.foodDiary.unshift(entry);
+  db.foodDiary = db.foodDiary.slice(0, 8000);
+  writeDb(db);
+  redirect(res, '/member?saved=food');
+}
+
+function memberProfilePayload(db, email) {
+  const clean = String(email || '').toLowerCase();
+  const order = latestMemberOrder(db, clean);
+  const lead = (db.leads || []).find(l => String(l.email || '').toLowerCase() === clean);
+  const profile = lead && lead.profile && typeof lead.profile === 'object' ? lead.profile : {};
+  const cs = order && order.clinicalSummary ? order.clinicalSummary : {};
+  return {
+    ...profile,
+    name: order?.name || lead?.name || profile.name || '',
+    email: clean,
+    goal: order?.goal || profile.goal || cs.goal || '',
+    plantype: order?.planType || profile.plantype || '',
+    packageName: order?.packageName || profile.packageName || '',
+    conds: Array.isArray(profile.conds) ? profile.conds : (Array.isArray(cs.conditions) ? cs.conditions : []),
+    diagnosis: order?.diagnosis || profile.diagnosis || cs.diagnosis || '',
+    allergies: order?.allergies || profile.allergies || cs.allergies || '',
+    symptoms: order?.symptoms || profile.symptoms || cs.symptoms || '',
+    foodDislikes: order?.foodDislikes || profile.foodDislikes || '',
+    notes: [profile.notes, profile.foodDislikes, order?.foodDislikes].filter(Boolean).join(', '),
+    budget: profile.budget || order?.budget || '',
+    cooking: profile.cooking || order?.cooking || ''
+  };
+}
+
+function diaryNeedsReplacement(entry = {}) {
+  const text = [
+    entry.replacementRequest,
+    entry.taste,
+    entry.cost,
+    entry.symptomsAfter,
+    entry.dislikedRepeated
+  ].join(' ').toLowerCase();
+  return /\byes\b|not tasty|expensive|hard|symptom|bloat|reflux|nausea|headache|diarrh|dislike|boring|repeat|unrealistic/.test(text);
+}
+
+function replacementProblemTerms(entry = {}) {
+  const raw = [
+    entry.meal,
+    entry.dislikedRepeated,
+    entry.symptomsAfter,
+    entry.replacementRequest
+  ].join(' ').toLowerCase();
+  const known = [
+    'egg', 'eggs', 'smoothie', 'milk', 'yogurt', 'beans', 'cowpeas', 'lentils', 'fish', 'tilapia',
+    'mukene', 'chicken', 'groundnut', 'peanut', 'matooke', 'posho', 'rice', 'sweet potato',
+    'cabbage', 'avocado', 'salad', 'soup', 'oats', 'porridge'
+  ];
+  return known.filter(term => raw.includes(term));
+}
+
+function replacementMealType(entry = {}) {
+  const meal = String(entry.mealTime || '').toLowerCase();
+  if (meal.includes('break')) return 'breakfast';
+  if (meal.includes('lunch')) return 'lunch';
+  if (meal.includes('dinner')) return 'dinner';
+  if (meal.includes('snack') || meal.includes('drink')) return 'snack';
+  return '';
+}
+
+function recipeReplacementCandidates(entry = {}, profilePayload = {}, limit = 3) {
+  const meal = replacementMealType(entry);
+  const profile = profileFromRecipeRequest({
+    ...profilePayload,
+    allergies: [profilePayload.allergies, profilePayload.foodDislikes, replacementProblemTerms(entry).join(', ')].filter(Boolean).join(', ')
+  });
+  const problemTerms = replacementProblemTerms(entry);
+  const replacementReason = String(entry.replacementRequest || '').toLowerCase();
+  const allRecipes = loadPrivateRecipes().recipes || [];
+  const candidates = allRecipes
+    .filter(recipe => (!meal || recipe.meal === meal) && privateRecipeAllowed(recipe, profile))
+    .filter(recipe => !problemTerms.some(term => recipeText(recipe).includes(term)))
+    .filter(recipe => {
+      if ((meal === 'lunch' || meal === 'dinner') && isSmoothieLike(recipe)) return false;
+      if (replacementReason.includes('hard') && Number(recipe.time || 99) > 25) return false;
+      if (replacementReason.includes('expensive') && !['Low', 'Medium'].includes(String(recipe.cost || ''))) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aScore = privateRecipeScore(a, profile) + recipeCulinaryBoost(a) + mealRealismScore(a, meal || a.meal);
+      const bScore = privateRecipeScore(b, profile) + recipeCulinaryBoost(b) + mealRealismScore(b, meal || b.meal);
+      return bScore - aScore || String(a.name).localeCompare(String(b.name));
+    });
+  return candidates.slice(0, limit).map(recipe => ({
+    name: recipe.name || 'Alternative meal',
+    meal: recipe.meal || meal || '',
+    portion: recipe.portion || 'Use a balanced plate: measured starch, palm-size protein, and plenty of vegetables.',
+    ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.slice(0, 8) : [],
+    method: shortText(recipe.method || 'Prepare simply with familiar ingredients and minimal oil, sugar, and salt.', 260),
+    smartSwap: Array.isArray(recipe.substitutions) && recipe.substitutions.length ? recipe.substitutions[0] : 'Use a similar local staple, protein, or vegetable that fits your budget and tolerance.',
+    why: replacementReason.includes('expensive') ? 'Suggested because it is more budget-friendly.' :
+      replacementReason.includes('hard') ? 'Suggested because it should be easier to prepare.' :
+      String(entry.symptomsAfter || '').trim() ? 'Suggested as a gentler alternative to review for tolerance.' :
+      'Suggested to improve taste, variety, and real-life fit.'
+  }));
+}
+
+function memberReplacementRows(db, email, limit = 6) {
+  const clean = String(email || '').toLowerCase();
+  const profile = memberProfilePayload(db, clean);
+  return (db.foodDiary || [])
+    .filter(entry => String(entry.email || '').toLowerCase() === clean && diaryNeedsReplacement(entry))
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, limit)
+    .map(entry => ({ entry, suggestions: recipeReplacementCandidates(entry, profile, 3) }));
+}
+
+function buildRecipeReplacementQueue(db = readDb()) {
+  const rows = [];
+  for (const entry of (db.foodDiary || [])) {
+    if (!diaryNeedsReplacement(entry)) continue;
+    const profile = memberProfilePayload(db, entry.email);
+    const suggestions = recipeReplacementCandidates(entry, profile, 3);
+    rows.push({
+      id: entry.id,
+      createdAt: entry.createdAt || '',
+      email: String(entry.email || '').toLowerCase(),
+      name: entry.name || profile.name || '',
+      mealTime: entry.mealTime || '',
+      meal: entry.meal || '',
+      issue: [entry.replacementRequest, entry.dislikedRepeated, entry.symptomsAfter, entry.cost, entry.taste].filter(Boolean).join(' | '),
+      suggestions
+    });
+  }
+  return rows.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+function buildPlanFitScore(db, email) {
+  const clean = String(email || '').toLowerCase();
+  const progress = (db.progressEntries || [])
+    .filter(x => String(x.email || '').toLowerCase() === clean)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, 10);
+  const diary = (db.foodDiary || [])
+    .filter(x => String(x.email || '').toLowerCase() === clean)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, 20);
+  let score = 72;
+  const strengths = [];
+  const needs = [];
+  const severeTerms = /chest pain|faint|fainting|blood in stool|severe|swelling|vomit|rapid weight loss/i;
+  const symptomTerms = /bloat|reflux|nausea|headache|sleepy|pain|diarrhoea|diarrhea|vomit/i;
+  const expensiveCount = diary.filter(d => /expensive/i.test(d.cost || '')).length;
+  const notTastyCount = diary.filter(d => /not tasty/i.test(d.taste || '')).length;
+  const goodTasteCount = diary.filter(d => /delicious|good/i.test(d.taste || '')).length;
+  const replacementCount = diary.filter(diaryNeedsReplacement).length;
+  const symptomMeals = diary.filter(d => symptomTerms.test(d.symptomsAfter || '')).length;
+  const highHunger = progress.filter(p => /high|very high/i.test(p.hunger || '')).length;
+  const lowEnergy = progress.filter(p => /low/i.test(p.energy || '')).length;
+  const poorSleep = progress.filter(p => /poor/i.test(p.sleep || '')).length;
+  const symptoms = progress.filter(p => String(p.symptoms || '').trim()).length;
+  const severe = progress.some(p => severeTerms.test(p.symptoms || '')) || diary.some(d => severeTerms.test(d.symptomsAfter || ''));
+
+  score += Math.min(10, diary.length * 1.2);
+  score += Math.min(8, progress.length * 1.5);
+  score += Math.min(10, goodTasteCount * 2);
+  score -= expensiveCount * 4;
+  score -= notTastyCount * 5;
+  score -= replacementCount * 4;
+  score -= symptomMeals * 6;
+  score -= highHunger * 4;
+  score -= lowEnergy * 4;
+  score -= poorSleep * 2;
+  score -= symptoms * 2;
+  if (severe) score = Math.min(score, 35);
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  if (diary.length) strengths.push(`${diary.length} food diary entr${diary.length === 1 ? 'y' : 'ies'} captured.`);
+  if (progress.length) strengths.push(`${progress.length} progress check-in${progress.length === 1 ? '' : 's'} captured.`);
+  if (goodTasteCount) strengths.push(`${goodTasteCount} meal${goodTasteCount === 1 ? '' : 's'} reported as good or delicious.`);
+  if (!diary.length && !progress.length) needs.push('Start logging meals or progress so Bulamu can understand fit better.');
+  if (replacementCount) needs.push('Some meals may need replacement for taste, cost, symptoms, or practicality.');
+  if (expensiveCount) needs.push('Cost may be affecting adherence. Consider lower-budget swaps.');
+  if (notTastyCount) needs.push('Taste needs attention so the plan feels easier to follow.');
+  if (symptomMeals || symptoms) needs.push('Symptoms were reported. Review patterns and seek medical care if severe or worsening.');
+  if (highHunger) needs.push('Hunger is high. Portions, protein, fibre, or meal timing may need adjustment.');
+  if (lowEnergy) needs.push('Energy is low. Review calories, iron-rich foods, hydration, sleep, and medical factors.');
+  if (severe) needs.unshift('Red-flag symptoms may need urgent medical care.');
+  if (!needs.length) needs.push('Keep tracking. The plan currently looks workable from the available entries.');
+
+  const label = score >= 82 ? 'Strong fit' : score >= 65 ? 'Good fit, keep adjusting' : score >= 45 ? 'Needs review' : 'Priority review';
+  const cls = score >= 82 ? 'approved' : score >= 65 ? 'pending' : 'rejected';
+  return {
+    score,
+    label,
+    cls,
+    strengths: strengths.slice(0, 4),
+    needs: needs.slice(0, 5),
+    diaryCount: diary.length,
+    progressCount: progress.length,
+    replacementCount,
+    latestAt: [progress[0]?.createdAt, diary[0]?.createdAt].filter(Boolean).sort().pop() || ''
+  };
+}
+
+function buildPlanFitQueue(db = readDb()) {
+  const emails = new Set();
+  (db.orders || []).forEach(o => { if (o.email) emails.add(String(o.email).toLowerCase()); });
+  (db.leads || []).forEach(l => { if (l.email) emails.add(String(l.email).toLowerCase()); });
+  (db.progressEntries || []).forEach(p => { if (p.email) emails.add(String(p.email).toLowerCase()); });
+  (db.foodDiary || []).forEach(d => { if (d.email) emails.add(String(d.email).toLowerCase()); });
+  return Array.from(emails).map(email => {
+    const latest = latestMemberOrder(db, email);
+    const lead = (db.leads || []).find(l => String(l.email || '').toLowerCase() === email);
+    return {
+      email,
+      name: latest?.name || lead?.name || '',
+      phone: latest?.phone || lead?.phone || '',
+      packageName: latest?.packageName || '',
+      status: latest?.status || 'lead',
+      fit: buildPlanFitScore(db, email)
+    };
+  }).filter(row => row.fit.diaryCount || row.fit.progressCount)
+    .sort((a, b) => a.fit.score - b.fit.score || String(b.fit.latestAt || '').localeCompare(String(a.fit.latestAt || '')));
+}
+
+function memberDashboardPage(req, session) {
+  const db = readDb();
+  const email = String(session.email || '').toLowerCase();
+  const orders = db.orders
+    .filter(o => String(o.email || '').toLowerCase() === email)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const lead = (db.leads || []).find(l => String(l.email || '').toLowerCase() === email);
+  const latest = orders[0] || null;
+  const activeOrder = orders.find(o => o.status === 'approved' && memberSubscriptionStatus(o).active) || null;
+  const advancedOrder = orders.find(o => memberLevelFromPackage(o.packageName) === 'advanced') || null;
+  const statusOrder = activeOrder || advancedOrder || latest;
+  const sub = memberSubscriptionStatus(statusOrder);
+  const renewalNotice = sub.renewalReminder
+    ? `<div class="saved" style="background:#fff1c7;color:#765100;border-left-color:#b98900">${escapeHtml(sub.renewalReminder)}</div>`
+    : '';
+  const saved = new URL(req.url || '/', `http://${req.headers.host}`).searchParams.get('saved') || '';
+  const progress = (db.progressEntries || []).filter(x => String(x.email || '').toLowerCase() === email).slice(0, 8);
+  const diary = (db.foodDiary || []).filter(x => String(x.email || '').toLowerCase() === email).slice(0, 8);
+  const replacements = memberReplacementRows(db, email, 5);
+  const fit = buildPlanFitScore(db, email);
+  const rows = orders.map(o => {
+    const status = memberSubscriptionStatus(o);
+    const approvedLinks = o.status === 'approved'
+      ? `<a class="btn" href="/plan/${escapeHtml(o.downloadToken)}" target="_blank">Open plan</a>${o.followupToken ? ` <a class="btn ghost" href="/followup/${escapeHtml(o.followupToken)}" target="_blank">Submit progress</a>` : ''}`
+      : '<span class="muted">Available after approval</span>';
+    return `<tr><td><strong>${escapeHtml(o.packageName || 'Nutrition plan')}</strong><br><small>${escapeHtml(o.amount || '')}</small></td><td><span class="badge ${escapeHtml(status.cls)}">${escapeHtml(status.label)}</span><br><small>${escapeHtml(status.detail)}</small></td><td><small>${escapeHtml(new Date(o.createdAt || Date.now()).toLocaleString())}</small><br><small>Reference: ${escapeHtml(o.txRef || '')}</small></td><td>${approvedLinks}</td></tr>`;
+  }).join('');
+  const progressRows = progress.map(p => `<tr><td><strong>${escapeHtml(new Date(p.createdAt).toLocaleDateString())}</strong><br><small>${escapeHtml(new Date(p.createdAt).toLocaleTimeString())}</small></td><td>${escapeHtml(p.weight || '-')} kg<br><small>Waist: ${escapeHtml(p.waist || '-')}</small></td><td>${escapeHtml(p.energy || '-')}<br><small>Mood: ${escapeHtml(p.mood || '-')} | Sleep: ${escapeHtml(p.sleep || '-')}</small></td><td>${escapeHtml(shortText([p.symptoms, p.notes].filter(Boolean).join(' | '), 160) || '-')}</td></tr>`).join('');
+  const diaryRows = diary.map(d => `<tr><td><strong>${escapeHtml(d.mealTime || 'Meal')}</strong><br><small>${escapeHtml(new Date(d.createdAt).toLocaleDateString())}</small></td><td>${escapeHtml(shortText(d.meal || '-', 120))}<br><small>Portion: ${escapeHtml(shortText(d.portion || '-', 80))}</small></td><td>${escapeHtml(d.taste || '-')}<br><small>Cost: ${escapeHtml(d.cost || '-')}</small></td><td>${escapeHtml(shortText([d.symptomsAfter, d.replacementRequest].filter(Boolean).join(' | '), 150) || '-')}</td></tr>`).join('');
+  const replacementHtml = replacements.map(({ entry, suggestions }) => `<div class="swap-card"><h3>${escapeHtml(entry.mealTime || 'Meal')} replacement ideas</h3><p><strong>Reported meal:</strong> ${escapeHtml(shortText(entry.meal || '-', 140))}</p><p><strong>Reason:</strong> ${escapeHtml(shortText([entry.replacementRequest, entry.dislikedRepeated, entry.symptomsAfter].filter(Boolean).join(' | ') || 'Requested meal support', 180))}</p><div class="swap-grid">${suggestions.length ? suggestions.map(s => `<article><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(s.meal || '')}</small><p>${escapeHtml(s.why)}</p><p><b>Portion:</b> ${escapeHtml(shortText(s.portion, 160))}</p><p><b>Smart swap:</b> ${escapeHtml(shortText(s.smartSwap, 140))}</p></article>`).join('') : '<p class="muted">Breyer will review this meal and suggest a personalised replacement.</p>'}</div></div>`).join('');
+  const savedMessage = saved === 'progress' ? '<div class="saved">Progress check-in saved.</div>' : saved === 'food' ? '<div class="saved">Food diary entry saved.</div>' : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bulamu360 Member Portal</title>
+  <style>body{margin:0;font-family:Arial,sans-serif;background:#f7f3ec;color:#241a10}.wrap{max-width:1180px;margin:0 auto;padding:26px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#b85c1c;font-weight:800}h1{margin:6px 0;color:#1e3a1a;font-size:34px}h2{color:#1e3a1a;margin:0 0 8px}h3{color:#1e3a1a;margin:0 0 8px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.card{background:#fffdf8;border:1px solid #e6dccd;border-radius:18px;padding:18px;box-shadow:0 16px 45px #2a1f1410}.card b{display:block;color:#1e3a1a;font-size:25px;margin-top:5px}.muted,small,p{color:#6d5d4b;line-height:1.5}.panel{background:#fffdf8;border:1px solid #e6dccd;border-radius:18px;overflow:auto;box-shadow:0 16px 45px #2a1f1410;margin-top:14px}table{width:100%;border-collapse:collapse;min-width:860px}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:14px}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#786855;background:#fbf8f3}.badge{display:inline-flex;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:800}.approved{background:#dff3d8;color:#1e5a1a}.pending{background:#fff1c7;color:#8a6200}.rejected{background:#ffe1dc;color:#8a1010}.btn{display:inline-flex;align-items:center;justify-content:center;background:#1e3a1a;color:#fff;text-decoration:none;border-radius:999px;padding:9px 12px;font-weight:800;font-size:12px;margin:3px;border:0;cursor:pointer}.ghost{background:#ede8df;color:#241a10}.forms{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.form-grid,.swap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#786855;font-weight:800;margin:9px 0 5px}input,select,textarea{width:100%;box-sizing:border-box;border:1px solid #ddd2c2;border-radius:10px;padding:10px;font:14px Arial,sans-serif;background:#fff}textarea{min-height:78px}.saved{background:#e4f5dd;color:#1e5a1a;border-left:4px solid #1e5a1a;border-radius:10px;padding:11px 13px;margin:10px 0;font-weight:800}.locked{opacity:.62}.fit-list{margin:8px 0 0;padding-left:18px;color:#6d5d4b;font-size:13px;line-height:1.45}.swap-card{background:#fffdf8;border:1px solid #e6dccd;border-radius:18px;padding:16px;margin-top:12px;box-shadow:0 16px 45px #2a1f1410}.swap-card article{background:#faf7ef;border:1px solid #e6dccd;border-radius:14px;padding:13px}.swap-card article strong{display:block;color:#1e3a1a}.swap-card article small{display:block;margin:4px 0 7px;text-transform:uppercase;letter-spacing:.08em;font-size:10px}.swap-card article p{font-size:13px;margin:7px 0}@media(max-width:950px){.top{display:block}.grid,.forms,.form-grid,.swap-grid{grid-template-columns:1fr}.wrap{padding:16px}}</style></head>
+  <body><div class="wrap"><div class="top"><div><div class="eyebrow">Bulamu360 Member Portal</div><h1>Hello ${escapeHtml(session.name || latest?.name || lead?.name || 'there')}</h1><p>View your plan status, saved approved plans, progress timeline, food diary, and member tools.</p></div><div><a class="btn ghost" href="/">Main app</a><a class="btn" href="/#pricing">Subscribe / Renew Membership</a><a class="btn ghost" href="/member/logout">Logout</a></div></div>${savedMessage}${renewalNotice}
+  <section class="grid"><div class="card"><span class="muted">Membership status</span><b>${escapeHtml(sub.label)}</b><p>${escapeHtml(sub.detail)}</p>${sub.activeUntil ? `<a class="btn" href="/#pricing">Renew Membership</a>` : `<a class="btn" href="/#pricing">Subscribe / Renew Membership</a>`}</div><div class="card"><span class="muted">Advanced access</span><b>${escapeHtml(sub.activeUntil ? `Until ${sub.activeUntil}` : 'Not active')}</b><p>${escapeHtml(sub.daysRemaining ? `${sub.daysRemaining} day(s) remaining.` : 'Choose Advanced to open premium member tools.')}</p></div><div class="card"><span class="muted">Plan fit score</span><b>${escapeHtml(fit.score)}%</b><p><span class="badge ${escapeHtml(fit.cls)}">${escapeHtml(fit.label)}</span></p><ul class="fit-list">${fit.needs.slice(0,2).map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div><div class="card"><span class="muted">Latest request</span><b>${escapeHtml(latest ? latest.status : 'Lead only')}</b><p>${escapeHtml(latest ? latest.packageName : 'Free assessment captured. Choose a plan when ready.')}</p></div></section>
+  <section class="panel"><table><thead><tr><th>Plan</th><th>Status</th><th>Date and reference</th><th>Access</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No paid plan requests yet. Your free assessment details have been captured.</td></tr>'}</tbody></table></section>
+  <section class="forms">
+    <form class="card" method="post" action="/member/progress"><h2>Progress Check-in</h2><p>Track real changes gently. This helps Breyer understand what is working, what feels hard, and what needs review.</p><div class="form-grid"><div><label>Weight kg</label><input name="weight" placeholder="e.g. 74"></div><div><label>Waist cm</label><input name="waist" placeholder="e.g. 88"></div><div><label>Blood pressure</label><input name="bloodPressure" placeholder="e.g. 128/82"></div><div><label>Blood sugar</label><input name="bloodSugar" placeholder="e.g. fasting 6.1"></div><div><label>Hunger</label><select name="hunger"><option></option><option>Low</option><option>Comfortable</option><option>High</option><option>Very high</option></select></div><div><label>Energy</label><select name="energy"><option></option><option>Low</option><option>Improving</option><option>Good</option><option>Very good</option></select></div><div><label>Mood</label><select name="mood"><option></option><option>Low</option><option>Stressed</option><option>Stable</option><option>Good</option></select></div><div><label>Sleep</label><select name="sleep"><option></option><option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option></select></div></div><label>Cravings</label><input name="cravings" placeholder="e.g. sugar in the evening"><label>Bowel habits</label><input name="bowelHabits" placeholder="e.g. constipation, normal, diarrhoea"><label>Symptoms</label><textarea name="symptoms" placeholder="Headaches, reflux, bloating, dizziness, swelling, nausea..."></textarea><label>Cycle or pregnancy notes</label><textarea name="cyclePregnancyNotes" placeholder="Optional: period symptoms, pregnancy changes, breastfeeding, cravings..."></textarea><label>Notes for Breyer</label><textarea name="notes" placeholder="What changed this week? What feels difficult?"></textarea><button class="btn" type="submit">Save Progress</button></form>
+    <form class="card" method="post" action="/member/food-diary"><h2>Food Diary</h2><p>Log meals in a practical way: what you ate, portion, taste, cost, symptoms, and what you want changed.</p><div class="form-grid"><div><label>Meal time</label><select name="mealTime"><option>Breakfast</option><option>Snack</option><option>Lunch</option><option>Dinner</option><option>Drink</option></select></div><div><label>Taste</label><select name="taste"><option></option><option>Delicious</option><option>Good</option><option>Okay</option><option>Not tasty</option></select></div><div><label>Hunger before</label><select name="hungerBefore"><option></option><option>Not hungry</option><option>Comfortable</option><option>Hungry</option><option>Very hungry</option></select></div><div><label>Fullness after</label><select name="fullnessAfter"><option></option><option>Still hungry</option><option>Satisfied</option><option>Too full</option></select></div><div><label>Cost</label><select name="cost"><option></option><option>Affordable</option><option>Manageable</option><option>Expensive</option></select></div><div><label>Need replacement?</label><select name="replacementRequest"><option></option><option>No</option><option>Yes, dislike this meal</option><option>Yes, too expensive</option><option>Yes, hard to cook</option><option>Yes, caused symptoms</option></select></div></div><label>Meal eaten</label><textarea name="meal" placeholder="e.g. matooke, beans, dodo, avocado"></textarea><label>Portion</label><input name="portion" placeholder="e.g. 1 fist matooke, 1 cup beans, 2 cups greens"><label>Symptoms after eating</label><textarea name="symptomsAfter" placeholder="Bloating, reflux, nausea, headache, sleepiness, none..."></textarea><label>Disliked or repeated meals</label><textarea name="dislikedRepeated" placeholder="Any food that felt boring, repeated, unrealistic, or unpleasant?"></textarea><button class="btn" type="submit">Save Meal</button></form>
+  </section>
+  <section class="panel"><table><thead><tr><th>Date</th><th>Body measures</th><th>Energy and mood</th><th>Symptoms / notes</th></tr></thead><tbody>${progressRows || '<tr><td colspan="4" class="muted">No progress check-ins yet.</td></tr>'}</tbody></table></section>
+  <section class="panel"><table><thead><tr><th>Meal</th><th>Food and portion</th><th>Taste and cost</th><th>Symptoms / replacement</th></tr></thead><tbody>${diaryRows || '<tr><td colspan="4" class="muted">No food diary entries yet.</td></tr>'}</tbody></table></section>
+  <section style="margin-top:16px"><div class="card"><h2>Meal Replacement Ideas</h2><p>When you report a meal as not tasty, repeated, expensive, hard to cook, or symptom-triggering, Bulamu suggests practical alternatives for Breyer to review with you.</p></div>${replacementHtml || '<div class="card" style="margin-top:12px"><p>No replacement requests yet. Add a food diary entry when a meal feels unrealistic, repetitive, expensive, or uncomfortable.</p></div>'}</section>
+  <section class="card" style="margin-top:16px"><h2>Member tools</h2><p><strong>Ask Bulamu Coach</strong>, meal replacement support, progress tracking, and diary review are connected to your active member status.</p></section>
+  </div></body></html>`;
+}
+
+async function handleMemberLogin(req, res) {
+  if (!rateLimit(req, res, 'member-login', { limit: 12, windowMs: 60_000 })) return;
+  const form = await readForm(req);
+  const email = String(form.email || '').trim().toLowerCase();
+  const code = String(form.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const db = readDb();
+  const orders = db.orders.filter(o => String(o.email || '').toLowerCase() === email);
+  const order = orders.find(o => {
+    const approval = String(o.approvalCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const tx = String(o.txRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return (approval && approval === code) || (tx && tx === code);
+  });
+  if (!order) return sendHtml(res, 401, memberLoginPage('No matching order was found for that email and code/reference.'));
+  const sid = randomBytes(24).toString('hex');
+  sessions.set(`member:${sid}`, {
+    type: 'member',
+    email,
+    name: order.name || '',
+    createdAt: Date.now(),
+    expires: Date.now() + 1000 * 60 * 60 * 24 * 30
+  });
+  res.writeHead(302, securityHeaders({
+    Location: '/member',
+    'Set-Cookie': memberSessionCookie(sid)
   }));
   res.end();
 }
@@ -1636,11 +4209,393 @@ function findOrder(db, id) {
   return db.orders.find(o => o.id === id);
 }
 
+function deleteOrderPage(order) {
+  if (!order) return '<p>Order not found.</p>';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Delete Order - Bulamu360</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:760px;margin:0 auto;padding:28px}.card{background:#fff;border:1px solid #e6dccd;border-radius:14px;padding:22px;box-shadow:0 10px 34px #2a1f1412}.warn{background:#ffe1dc;border-left:4px solid #8a1010;border-radius:10px;padding:12px 14px;margin:14px 0;color:#651010;line-height:1.55}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.box{background:#faf7f1;border:1px solid #e6dccd;border-radius:10px;padding:11px}.box strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7a3c10;margin-bottom:4px}textarea{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:12px;font:14px Arial,sans-serif;min-height:92px;background:#fffdf9}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:#1e3a1a;color:#fff;padding:11px 14px;border-radius:9px;text-decoration:none;font-weight:800;cursor:pointer}.ghost{background:#ede8df;color:#2a1f14}.danger{background:#8a1010;color:#fff}
+  </style></head><body><div class="wrap"><div class="card">
+    <h1>Delete order?</h1>
+    <div class="warn"><strong>This permanently removes the order from the admin dashboard.</strong><br>The customer approval link and admin access for this order will stop working after deletion. Use this for test orders, duplicates, mistakes, or records you no longer need.</div>
+    <div class="grid">
+      <div class="box"><strong>Customer</strong>${escapeHtml(order.name || '')}<br>${escapeHtml(order.email || '')}</div>
+      <div class="box"><strong>Plan</strong>${escapeHtml(order.packageName || '')}<br>${escapeHtml(order.amount || '')}</div>
+      <div class="box"><strong>Status</strong>${escapeHtml(order.status || '')}</div>
+      <div class="box"><strong>Reference</strong>${escapeHtml(order.txRef || '')}</div>
+    </div>
+    <form method="post" action="/admin/orders/${escapeHtml(order.id)}/delete">
+      <label><strong>Reason for deleting</strong></label>
+      <textarea name="deleteReason" placeholder="Example: test order, duplicate, wrong customer details, cleanup after export"></textarea>
+      <div class="actions">
+        <button class="btn danger">Yes, delete this order</button>
+        <a class="btn ghost" href="/admin">Cancel</a>
+        <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/plan" target="_blank">View plan first</a>
+      </div>
+    </form>
+  </div></div></body></html>`;
+}
+
+function removeSectionsByTitles(html = '', titles = []) {
+  let output = String(html || '');
+  for (const title of titles) {
+    let titleIndex = output.indexOf(title);
+    while (titleIndex >= 0) {
+      const start = output.lastIndexOf('<div class="sec"', titleIndex);
+      const next = output.indexOf('<div class="sec"', titleIndex + title.length);
+      const end = next >= 0 ? next : output.indexOf('</div></body>', titleIndex);
+      if (start < 0 || end < 0 || end <= start) break;
+      output = output.slice(0, start) + output.slice(end);
+      titleIndex = output.indexOf(title);
+    }
+  }
+  return output;
+}
+
+function planSectionVisibilityFromForm(form = {}) {
+  return {
+    shopping: Boolean(form.showShopping),
+    exercise: Boolean(form.showExercise),
+    followup: Boolean(form.showFollowup),
+    longTerm: Boolean(form.showLongTerm),
+    family: Boolean(form.showFamily),
+    gut: Boolean(form.showGut),
+    skin: Boolean(form.showSkin)
+  };
+}
+
+function applyPlanSectionControls(html = '', visibility = {}) {
+  let output = String(html || '');
+  if (!visibility.shopping) output = removeSectionsByTitles(output, ['Weekly Shopping and Meal Prep Guide', 'Weekly Shopping Lists']);
+  if (!visibility.exercise) output = removeSectionsByTitles(output, ['Movement and Exercise Guidance']);
+  if (!visibility.followup) output = removeSectionsByTitles(output, ['Follow-Up and Progress Roadmap', 'Progress Checkpoints']);
+  if (!visibility.longTerm) output = removeSectionsByTitles(output, ['Long-Term Health Foods', 'Protective Foods for Long-Term Health']);
+  if (!visibility.family) output = removeSectionsByTitles(output, ['Household Personalisation Plan', 'Family and Household Value Guide']);
+  if (!visibility.gut) output = removeSectionsByTitles(output, ['Gut Health and Digestive Wellness']);
+  if (!visibility.skin) output = removeSectionsByTitles(output, ['Nutrition for Hair, Skin and Nail Health']);
+  return output;
+}
+
+function checkbox(name, label, checkedValue = true) {
+  return `<label class="check"><input type="checkbox" name="${escapeHtml(name)}" ${checkedValue ? 'checked' : ''}> ${escapeHtml(label)}</label>`;
+}
+
+function escapeRegExp(value) {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function decodeHtmlEntities(value = '') {
+  return String(value ?? '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = Number(n);
+      return Number.isFinite(code) ? String.fromCharCode(code) : _;
+    });
+}
+
+function htmlToPlain(value = '') {
+  return decodeHtmlEntities(String(value ?? '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim());
+}
+
+function plainToHtmlText(value = '') {
+  return escapeHtml(String(value ?? '').trim()).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
+}
+
+function sanitizePlanHtml(html = '') {
+  return String(html || '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<(iframe|object|embed)\b[\s\S]*?<\/\1>/gi, '')
+    .replace(/\s(on[a-z]+)\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, (match, attr, value) => {
+      const cleanValue = String(value || '').replace(/^['"]|['"]$/g, '').trim();
+      return attr.toLowerCase() === 'onclick' && cleanValue === 'window.print()' ? match : '';
+    })
+    .replace(/\s(href|src)\s*=\s*("|')\s*javascript:[\s\S]*?\2/gi, '');
+}
+
+function findDivBlocksByClass(html = '', className = '') {
+  const source = String(html || '');
+  const blocks = [];
+  const marker = `<div class="${className}"`;
+  let searchFrom = 0;
+  while (searchFrom < source.length) {
+    const start = source.indexOf(marker, searchFrom);
+    if (start < 0) break;
+    const divRe = /<\/?div\b[^>]*>/gi;
+    divRe.lastIndex = start;
+    let depth = 0;
+    let end = -1;
+    let match;
+    while ((match = divRe.exec(source))) {
+      if (match[0].startsWith('</')) depth -= 1;
+      else depth += 1;
+      if (depth === 0) {
+        end = divRe.lastIndex;
+        break;
+      }
+    }
+    if (end < 0) break;
+    blocks.push({ start, end, html: source.slice(start, end) });
+    searchFrom = end;
+  }
+  return blocks;
+}
+
+function extractTaggedText(html = '', className = '', tag = 'div') {
+  const re = new RegExp(`<${tag} class="${escapeRegExp(className)}">([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const match = String(html || '').match(re);
+  return htmlToPlain(match ? match[1] : '');
+}
+
+function extractMealBoxText(cardHtml = '', label = '') {
+  const re = new RegExp(`<div class="meal-box"><strong>${escapeRegExp(label)}<\\/strong><p>([\\s\\S]*?)<\\/p><\\/div>`, 'i');
+  const match = String(cardHtml || '').match(re);
+  return htmlToPlain(match ? match[1] : '');
+}
+
+function extractMealNoteText(cardHtml = '', label = '') {
+  const re = new RegExp(`<div class="meal-note"><strong>${escapeRegExp(label)}<\\/strong><br>([\\s\\S]*?)<\\/div>`, 'i');
+  const match = String(cardHtml || '').match(re);
+  return htmlToPlain(match ? match[1] : '');
+}
+
+function mealCardsForEditor(html = '') {
+  return findDivBlocksByClass(html, 'meal-card').map((block, index) => ({
+    index,
+    time: extractTaggedText(block.html, 'meal-time'),
+    name: extractTaggedText(block.html, 'meal-name'),
+    ingredients: extractMealBoxText(block.html, 'Ingredients'),
+    preparation: extractMealBoxText(block.html, 'Preparation'),
+    portion: extractMealBoxText(block.html, 'Portion guide'),
+    swaps: extractMealBoxText(block.html, 'Smart swaps'),
+    reason: extractMealNoteText(block.html, 'Food reason'),
+    taste: extractMealNoteText(block.html, 'Taste and practical notes')
+  }));
+}
+
+function replaceMealBoxText(cardHtml = '', label = '', value = '') {
+  const re = new RegExp(`(<div class="meal-box"><strong>${escapeRegExp(label)}<\\/strong><p>)[\\s\\S]*?(<\\/p><\\/div>)`, 'i');
+  return String(cardHtml || '').replace(re, `$1${plainToHtmlText(value)}$2`);
+}
+
+function replaceMealNoteText(cardHtml = '', label = '', value = '') {
+  const re = new RegExp(`(<div class="meal-note"><strong>${escapeRegExp(label)}<\\/strong><br>)[\\s\\S]*?(<\\/div>)`, 'i');
+  return String(cardHtml || '').replace(re, `$1${plainToHtmlText(value)}$2`);
+}
+
+function applyMealContentEdits(html = '', form = {}) {
+  const blocks = findDivBlocksByClass(html, 'meal-card');
+  let output = String(html || '');
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    const block = blocks[i];
+    let card = block.html;
+    const name = form[`mealName_${i}`];
+    if (typeof name === 'string') {
+      card = card.replace(/(<div class="meal-name">)[\s\S]*?(<\/div>)/i, `$1${escapeHtml(name.trim())}$2`);
+    }
+    card = replaceMealBoxText(card, 'Ingredients', form[`ingredients_${i}`] ?? extractMealBoxText(card, 'Ingredients'));
+    card = replaceMealBoxText(card, 'Preparation', form[`preparation_${i}`] ?? extractMealBoxText(card, 'Preparation'));
+    card = replaceMealBoxText(card, 'Portion guide', form[`portion_${i}`] ?? extractMealBoxText(card, 'Portion guide'));
+    card = replaceMealBoxText(card, 'Smart swaps', form[`swaps_${i}`] ?? extractMealBoxText(card, 'Smart swaps'));
+    card = replaceMealNoteText(card, 'Food reason', form[`reason_${i}`] ?? extractMealNoteText(card, 'Food reason'));
+    card = replaceMealNoteText(card, 'Taste and practical notes', form[`taste_${i}`] ?? extractMealNoteText(card, 'Taste and practical notes'));
+    output = output.slice(0, block.start) + card + output.slice(block.end);
+  }
+  return output;
+}
+
+function mealContentFields(card) {
+  const title = `${card.time || `Meal ${card.index + 1}`} - ${card.name || 'Untitled meal'}`;
+  return `<details class="meal-edit" ${card.index < 5 ? 'open' : ''}>
+    <summary>${escapeHtml(title)}</summary>
+    <div class="field"><label>Meal name</label><input name="mealName_${card.index}" value="${escapeHtml(card.name)}"></div>
+    <div class="field"><label>Ingredients</label><textarea name="ingredients_${card.index}">${escapeHtml(card.ingredients)}</textarea></div>
+    <div class="field"><label>Preparation</label><textarea name="preparation_${card.index}">${escapeHtml(card.preparation)}</textarea></div>
+    <div class="field"><label>Detailed portion guide</label><textarea name="portion_${card.index}">${escapeHtml(card.portion)}</textarea></div>
+    <div class="field"><label>Smart swaps</label><textarea name="swaps_${card.index}">${escapeHtml(card.swaps)}</textarea></div>
+    <div class="field"><label>Food reason</label><textarea name="reason_${card.index}">${escapeHtml(card.reason)}</textarea></div>
+    <div class="field"><label>Taste and practical notes</label><textarea name="taste_${card.index}">${escapeHtml(card.taste)}</textarea></div>
+  </details>`;
+}
+
+function planContentEditorPage(order, message = '') {
+  if (!order) return '<p>Order not found.</p>';
+  const html = order.finalHtmlPlan || applyCustomerReleaseNote(order);
+  const cards = mealCardsForEditor(html);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Edit Plan Content - Bulamu360</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1500px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:#1e3a1a;color:#fff;padding:10px 13px;border-radius:9px;text-decoration:none;font-weight:800;cursor:pointer}.ghost{background:#ede8df;color:#2a1f14}.grid{display:grid;grid-template-columns:minmax(520px,1fr) minmax(420px,.85fr);gap:14px}.panel{background:#fff;border:1px solid #e6dccd;border-radius:14px;padding:16px;box-shadow:0 10px 34px #2a1f1412}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}.hint{font-size:13px;color:#6d5d4b;line-height:1.5}.field{margin:10px 0}.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:#7a6a57;margin-bottom:5px}input,textarea{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:10px;font:14px Arial,sans-serif;background:#fffdf9;color:#241a10;line-height:1.45}textarea{min-height:74px;resize:vertical}.meal-edit{border:1px solid #e6dccd;border-radius:12px;background:#faf7f1;margin:10px 0;overflow:hidden}.meal-edit summary{cursor:pointer;padding:12px 14px;font-weight:900;color:#1e3a1a}.meal-edit .field{padding:0 14px}.meal-edit .field:last-child{padding-bottom:12px}.preview{height:820px;border:1px solid #d8d0c4;border-radius:12px;overflow:hidden;background:#fff}.preview iframe{width:100%;height:100%;border:0}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.meta{font-size:13px;color:#6d5d4b}.empty{background:#fff1c7;color:#6f4b00;border-radius:10px;padding:12px;line-height:1.5}@media(max-width:1000px){.grid{grid-template-columns:1fr}.preview{height:560px}.top{display:block}.actions{margin-top:12px}}
+  </style></head><body><div class="wrap">
+    <div class="top">
+      <div><h1>Edit Plan Content</h1><p class="meta">${escapeHtml(order.name || '')} - ${escapeHtml(order.packageName || '')} - ${escapeHtml(order.status || '')}</p></div>
+      <div class="actions"><a class="btn ghost" href="/admin">Dashboard</a><a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Review</a><a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/edit">Advanced HTML editor</a><a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/plan" target="_blank">Open preview</a></div>
+    </div>
+    ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
+    <form method="post" action="/admin/orders/${escapeHtml(order.id)}/content">
+      <div class="grid">
+        <div class="panel">
+          <h2>Simple Meal Editor</h2>
+          <p class="hint">Use this for normal dietician review. It edits the words inside each meal card while preserving the approved Bulamu360 layout, branding, and lower sections.</p>
+          ${cards.length ? cards.map(mealContentFields).join('') : '<div class="empty">No meal cards were found in this plan. Use the advanced HTML editor for this older draft.</div>'}
+          <div class="actions">
+            <button class="btn" name="intent" value="save">Save Plan Content</button>
+            ${order.status === 'pending' ? `<button class="btn" name="intent" value="approve">Save, Approve and Send</button>` : ''}
+            <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Back to review</a>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Live Preview</h2>
+          <p class="hint">After saving, refresh or reopen preview to confirm the customer copy still looks polished.</p>
+          <div class="preview"><iframe src="/admin/orders/${escapeHtml(order.id)}/plan"></iframe></div>
+        </div>
+      </div>
+    </form>
+  </div></body></html>`;
+}
+
+async function handlePlanContentEditor(req, res, id) {
+  const db = readDb();
+  const order = findOrder(db, id);
+  if (!order) return sendHtml(res, 404, 'Order not found');
+  if (req.method === 'GET') return sendHtml(res, 200, planContentEditorPage(order));
+  const form = await readForm(req);
+  const baseHtml = order.finalHtmlPlan || applyCustomerReleaseNote(order);
+  order.finalHtmlPlan = sanitizePlanHtml(applyMealContentEdits(baseHtml, form));
+  order.planContentEditHistory = Array.isArray(order.planContentEditHistory) ? order.planContentEditHistory : [];
+  order.planContentEditHistory.push({
+    at: new Date().toISOString(),
+    intent: String(form.intent || 'save'),
+    mealCardCount: findDivBlocksByClass(order.finalHtmlPlan || '', 'meal-card').length,
+    hash: createHash('sha256').update(order.finalHtmlPlan || '').digest('hex')
+  });
+  auditAdminAction(db, req, 'plan-content-edit', {
+    orderId: order.id,
+    customer: order.email,
+    intent: String(form.intent || 'save'),
+    mealCardCount: findDivBlocksByClass(order.finalHtmlPlan || '', 'meal-card').length
+  });
+  order.finalHtmlHash = createHash('sha256').update(order.finalHtmlPlan || '').digest('hex');
+  order.planEditedAt = new Date().toISOString();
+  order.updatedAt = order.planEditedAt;
+  writeDb(db);
+  if (form.intent === 'approve') {
+    if (!(order.adminReview && order.adminReview.checklistComplete)) {
+      return sendHtml(res, 400, planContentEditorPage(order, 'Saved, but approval checklist is not complete. Complete the review checklist before sending.'));
+    }
+    approveOrder(db, order, form);
+    writeDb(db);
+    return redirect(res, '/admin?status=approved');
+  }
+  return sendHtml(res, 200, planContentEditorPage(order, 'Plan content saved without touching the raw HTML layout.'));
+}
+
+function planEditorPage(order, message = '') {
+  if (!order) return '<p>Order not found.</p>';
+  const html = order.finalHtmlPlan || applyCustomerReleaseNote(order);
+  const visibility = order.planSectionVisibility || {
+    shopping: true,
+    exercise: true,
+    followup: true,
+    longTerm: true,
+    family: true,
+    gut: true,
+    skin: true
+  };
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Edit Plan - Bulamu360</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1500px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:#1e3a1a;color:#fff;padding:10px 13px;border-radius:9px;text-decoration:none;font-weight:800;cursor:pointer}.ghost{background:#ede8df;color:#2a1f14}.danger{background:#8a1010;color:#fff}.grid{display:grid;grid-template-columns:minmax(420px,1fr) minmax(420px,1fr);gap:14px}.panel{background:#fff;border:1px solid #e6dccd;border-radius:14px;padding:16px;box-shadow:0 10px 34px #2a1f1412}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}.check{display:block;background:#faf7f1;border:1px solid #e6dccd;border-radius:9px;padding:9px;margin:7px 0;font-size:13px}textarea{width:100%;height:760px;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:12px;font:12px Consolas,monospace;background:#fffdf9;color:#241a10;line-height:1.45}.preview{height:820px;border:1px solid #d8d0c4;border-radius:12px;overflow:hidden;background:#fff}.preview iframe{width:100%;height:100%;border:0}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.hint{font-size:13px;color:#6d5d4b;line-height:1.5}.meta{font-size:13px;color:#6d5d4b}@media(max-width:1000px){.grid{grid-template-columns:1fr}.preview{height:560px}.top{display:block}.actions{margin-top:12px}}
+  </style></head><body><div class="wrap">
+    <div class="top">
+      <div><h1>Edit Draft Plan</h1><p class="meta">${escapeHtml(order.name || '')} - ${escapeHtml(order.packageName || '')} - ${escapeHtml(order.status || '')}</p></div>
+      <div class="actions"><a class="btn ghost" href="/admin">Dashboard</a><a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Review</a><a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/plan" target="_blank">Open preview</a></div>
+    </div>
+    ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
+    <form method="post" action="/admin/orders/${escapeHtml(order.id)}/edit">
+      <div class="grid">
+        <div class="panel">
+          <h2>Final Plan HTML</h2>
+          <p class="hint">Edit the plan here before approval. This final version is what the customer receives after approval. Keep the main HTML structure intact.</p>
+          <textarea name="htmlContent" spellcheck="false">${escapeHtml(html)}</textarea>
+          <div class="actions">
+            <button class="btn" name="intent" value="save">Save Final Plan</button>
+            ${order.status === 'pending' ? `<button class="btn" name="intent" value="approve">Save, Approve and Send</button>` : ''}
+            <button class="btn ghost" name="intent" value="reset">Reset to Generated Draft</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Section Control</h2>
+          <p class="hint">Untick sections you do not want in the final customer copy. This removes the whole section when you save.</p>
+          ${checkbox('showShopping', 'Show shopping list and meal prep', visibility.shopping)}
+          ${checkbox('showExercise', 'Show exercise guidance', visibility.exercise)}
+          ${checkbox('showFollowup', 'Show follow-up roadmap and checkpoints', visibility.followup)}
+          ${checkbox('showLongTerm', 'Show long-term health foods', visibility.longTerm)}
+          ${checkbox('showFamily', 'Show family/household guidance', visibility.family)}
+          ${checkbox('showGut', 'Show gut health section', visibility.gut)}
+          ${checkbox('showSkin', 'Show hair, skin and nail section', visibility.skin)}
+          <h2>Preview</h2>
+          <div class="preview"><iframe src="/admin/orders/${escapeHtml(order.id)}/plan"></iframe></div>
+        </div>
+      </div>
+    </form>
+  </div></body></html>`;
+}
+
+async function handlePlanEditor(req, res, id) {
+  const db = readDb();
+  const order = findOrder(db, id);
+  if (!order) return sendHtml(res, 404, 'Order not found');
+  if (req.method === 'GET') return sendHtml(res, 200, planEditorPage(order));
+  const form = await readForm(req);
+  if (form.intent === 'reset') {
+    order.finalHtmlPlan = applyCustomerReleaseNote({ ...order, finalHtmlPlan: '', adminReview: order.adminReview || {} });
+    order.planSectionVisibility = { shopping: true, exercise: true, followup: true, longTerm: true, family: true, gut: true, skin: true };
+  } else {
+    const visibility = planSectionVisibilityFromForm(form);
+    const edited = String(form.htmlContent || '').trim();
+    order.planSectionVisibility = visibility;
+    order.finalHtmlPlan = sanitizePlanHtml(applyPlanSectionControls(edited || applyCustomerReleaseNote(order), visibility));
+  }
+  order.planEditHistory = Array.isArray(order.planEditHistory) ? order.planEditHistory : [];
+  order.planEditHistory.push({
+    at: new Date().toISOString(),
+    intent: String(form.intent || 'save'),
+    hash: createHash('sha256').update(order.finalHtmlPlan || '').digest('hex'),
+    visibility: order.planSectionVisibility
+  });
+  auditAdminAction(db, req, 'plan-html-edit', {
+    orderId: order.id,
+    customer: order.email,
+    intent: String(form.intent || 'save'),
+    visibility: order.planSectionVisibility
+  });
+  order.finalHtmlHash = createHash('sha256').update(order.finalHtmlPlan || '').digest('hex');
+  order.planEditedAt = new Date().toISOString();
+  order.updatedAt = order.planEditedAt;
+  writeDb(db);
+  if (form.intent === 'approve') {
+    if (!(order.adminReview && order.adminReview.checklistComplete)) {
+      return sendHtml(res, 400, planEditorPage(order, 'Saved, but approval checklist is not complete. Complete the review checklist before sending.'));
+    }
+    approveOrder(db, order, form);
+    writeDb(db);
+    return redirect(res, '/admin?status=approved');
+  }
+  return sendHtml(res, 200, planEditorPage(order, form.intent === 'reset' ? 'Plan reset to the generated draft.' : 'Final plan saved.'));
+}
+
 function checked(value) {
   return value ? 'checked' : '';
 }
 
-function adminReviewPage(order, message = '', mode = 'plan') {
+function adminReviewPage(order, message = '') {
   const cs = order.clinicalSummary || {};
   const safety = cs.safetyDecision || {};
   const audit = cs.planAudit || {};
@@ -1652,21 +4607,16 @@ function adminReviewPage(order, message = '', mode = 'plan') {
   const warningItems = Array.isArray(audit.warnings) ? audit.warnings : [];
   const ruleReview = Array.isArray(rules.review) ? rules.review : [];
   const ruleCaution = Array.isArray(rules.caution) ? rules.caution : [];
-  const editablePlanHtml = order.finalHtmlPlan || applyAdminAmendments(order);
-  const planEdit = review.planEdit || {};
-  const replacements = Array.isArray(planEdit.replacements) ? planEdit.replacements : [];
-  const activeMode = mode === 'html' ? 'html' : 'plan';
-  const editablePlanJson = JSON.stringify(editablePlanHtml).replace(/</g, '\\u003c');
   return `<!doctype html><html><head><meta charset="utf-8"><title>Review ${escapeHtml(order.name)} - Bulamu360</title>
   <style>
-  body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1180px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.btn{display:inline-block;border:0;background:#1e3a1a;color:#fff;padding:10px 13px;border-radius:9px;text-decoration:none;font-weight:700;cursor:pointer}.ghost{background:#ede8df;color:#2a1f14}.danger{background:#8a1010}.panel{background:#fff;border-radius:18px;padding:20px;box-shadow:0 10px 35px #0001;margin-bottom:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.edit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;font-weight:700;margin-bottom:5px}.value{font-size:14px;line-height:1.55}.pill{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin:3px;background:#f1eadf}.safe{background:#e4f5dd;color:#1e3a1a}.caution{background:#fff1c7;color:#8a6200}.review{background:#ffe1dc;color:#8a1010}.list span{display:block;border-left:3px solid #d8cfbf;padding-left:8px;margin-top:6px;font-size:13px;line-height:1.45}textarea,input[type=text],select{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:11px;font:14px Arial,sans-serif;background:#fffdf9}textarea{min-height:86px}.check{display:flex;gap:9px;align-items:flex-start;background:#faf7f1;border:1px solid #e2dbcf;border-radius:10px;padding:10px;margin:8px 0}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.preview{height:520px;border:1px solid #d8d0c4;border-radius:14px;overflow:hidden;background:#fff}.preview iframe{width:100%;height:100%;border:0}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}.edit-switch{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 16px}.edit-switch button{border:0;border-radius:999px;padding:11px 16px;font-weight:800;cursor:pointer;background:#ede8df;color:#2a1f14}.edit-switch button.active{background:#1e3a1a;color:#fff}.editor-panel.hidden{display:none}.hint{color:#6c5b49;font-size:13px;line-height:1.55;margin-top:-6px}.replace-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:9px}@media(max-width:800px){.grid,.edit-grid,.replace-row{grid-template-columns:1fr}}
+  body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:1180px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.btn{display:inline-block;border:0;background:#1e3a1a;color:#fff;padding:10px 13px;border-radius:9px;text-decoration:none;font-weight:700;cursor:pointer}.ghost{background:#ede8df;color:#2a1f14}.danger{background:#8a1010}.panel{background:#fff;border-radius:18px;padding:20px;box-shadow:0 10px 35px #0001;margin-bottom:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;font-weight:700;margin-bottom:5px}.value{font-size:14px;line-height:1.55}.pill{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin:3px;background:#f1eadf}.safe{background:#e4f5dd;color:#1e3a1a}.caution{background:#fff1c7;color:#8a6200}.review{background:#ffe1dc;color:#8a1010}.list span{display:block;border-left:3px solid #d8cfbf;padding-left:8px;margin-top:6px;font-size:13px;line-height:1.45}textarea,input[type=text],select{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:11px;font:14px Arial,sans-serif;background:#fffdf9}textarea{min-height:86px}.check{display:flex;gap:9px;align-items:flex-start;background:#faf7f1;border:1px solid #e2dbcf;border-radius:10px;padding:10px;margin:8px 0}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.preview{height:520px;border:1px solid #d8d0c4;border-radius:14px;overflow:hidden;background:#fff}.preview iframe{width:100%;height:100%;border:0}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}
   </style></head><body><div class="wrap">
-  <div class="top"><div><h1>Admin Plan Review</h1><p>${escapeHtml(order.name)} · ${escapeHtml(order.packageName)} · ${escapeHtml(order.amount)}</p></div><div><a class="btn ghost" href="/admin">Back to dashboard</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/plan" target="_blank">Open plan</a></div></div>
+  <div class="top"><div><h1>Admin Plan Review</h1><p>${escapeHtml(order.name)} - ${escapeHtml(order.packageName)} - ${escapeHtml(order.amount)}</p></div><div><a class="btn ghost" href="/admin">Back to dashboard</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/content">Edit content</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/edit">Edit plan</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/plan" target="_blank">Open plan</a></div></div>
   ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
   <div class="grid">
     <div class="panel"><h2>Customer and Payment</h2>
       <div class="label">Customer</div><div class="value"><strong>${escapeHtml(order.name)}</strong><br>${escapeHtml(order.email)}<br>${escapeHtml(order.phone)}</div><br>
-      <div class="label">Payment</div><div class="value">${escapeHtml(order.network)} · ${escapeHtml(order.txRef)}<br>${escapeHtml(order.amount)} · ${escapeHtml(order.status)}</div><br>
+      <div class="label">Payment</div><div class="value">${escapeHtml(order.network)} - ${escapeHtml(order.txRef)}<br>${escapeHtml(order.amount)} - ${escapeHtml(order.status)}</div><br>
       <div class="label">Clinical context</div><div class="value">Conditions: ${escapeHtml(Array.isArray(cs.conditions) ? cs.conditions.join(', ') : '') || 'None captured'}<br>Diagnosis: ${escapeHtml(cs.diagnosis || '') || 'Not captured'}<br>Allergies: ${escapeHtml(cs.allergies || '') || 'Not captured'}<br>Symptoms: ${escapeHtml(cs.symptoms || '') || 'Not captured'}</div>
     </div>
     <div class="panel"><h2>Safety and Quality</h2>
@@ -1695,33 +4645,6 @@ function adminReviewPage(order, message = '', mode = 'plan') {
       <div><div class="label">Dietary correction</div><textarea name="dietaryCorrection" placeholder="Specific correction to apply before/after approval">${escapeHtml(review.dietaryCorrection || '')}</textarea></div>
     </div>
     <div style="margin-top:12px"><div class="label">Follow-up instruction</div><textarea name="followUpInstruction" placeholder="When and how to follow up">${escapeHtml(review.followUpInstruction || '')}</textarea></div>
-    <h2>Edit Final Plan Before Sending</h2>
-    <div class="edit-switch">
-      <button type="button" id="editPlanButton" class="${activeMode === 'plan' ? 'active' : ''}">Edit Plan</button>
-      <button type="button" id="editHtmlButton" class="${activeMode === 'html' ? 'active' : ''}">Edit HTML File <span style="font-size:11px;font-weight:700;opacity:.75">(advanced)</span></button>
-    </div>
-    <div id="planEditorPanel" class="editor-panel ${activeMode === 'html' ? 'hidden' : ''}">
-      <p class="hint">Use this simple editor for normal plan improvements. It updates the final HTML file and live preview automatically without requiring you to code.</p>
-      <div class="edit-grid">
-        <div><div class="label">Client greeting</div><textarea class="simple-plan-field" name="planGreeting" placeholder="Example: Hello Naula, this plan has been adjusted after review...">${escapeHtml(planEdit.greeting || '')}</textarea></div>
-        <div><div class="label">Patient-facing guidance</div><textarea class="simple-plan-field" name="planExtraGuidance" placeholder="Any extra patient-facing guidance you want added safely.">${escapeHtml(planEdit.extraGuidance || '')}</textarea></div>
-        <div><div class="label">Meal notes</div><textarea class="simple-plan-field" name="planMealNotes" placeholder="Change meal wording, meal flow, or meals to emphasise.">${escapeHtml(planEdit.mealNotes || '')}</textarea></div>
-        <div><div class="label">Ingredients notes</div><textarea class="simple-plan-field" name="planIngredients" placeholder="Ingredients to clarify, add, remove, or simplify.">${escapeHtml(planEdit.ingredients || '')}</textarea></div>
-        <div><div class="label">Preparation notes</div><textarea class="simple-plan-field" name="planPreparation" placeholder="Cooking or preparation improvements.">${escapeHtml(planEdit.preparation || '')}</textarea></div>
-        <div><div class="label">Portion guide notes</div><textarea class="simple-plan-field" name="planPortions" placeholder="Specific cup, fist, palm, spoon, or plate guidance.">${escapeHtml(planEdit.portions || '')}</textarea></div>
-        <div><div class="label">Smart swaps</div><textarea class="simple-plan-field" name="planSwaps" placeholder="Food swaps for taste, budget, dislike, allergy, or condition.">${escapeHtml(planEdit.swaps || '')}</textarea></div>
-        <div><div class="label">Shopping list notes</div><textarea class="simple-plan-field" name="planShopping" placeholder="Market list changes, quantities, or cheaper alternatives.">${escapeHtml(planEdit.shopping || '')}</textarea></div>
-        <div><div class="label">Exercise section</div><textarea class="simple-plan-field" name="planExercise" placeholder="Safe movement guidance for this client only.">${escapeHtml(planEdit.exercise || '')}</textarea></div>
-        <div><div class="label">Follow-up notes</div><textarea class="simple-plan-field" name="planFollowup" placeholder="What the client should report back and when.">${escapeHtml(planEdit.followup || '')}</textarea></div>
-      </div>
-      <h3>Quick wording replacements</h3>
-      <p class="hint">Optional: replace exact words or phrases inside the plan. This is useful for correcting a meal name, ingredient, typo, or repeated phrase.</p>
-      ${[0, 1, 2].map(i => `<div class="replace-row"><div><div class="label">Find text ${i + 1}</div><input class="simple-plan-field" type="text" name="replaceFind${i + 1}" value="${escapeHtml((replacements[i] && replacements[i].find) || '')}" placeholder="Text currently in the plan"></div><div><div class="label">Replace with ${i + 1}</div><input class="simple-plan-field" type="text" name="replaceWith${i + 1}" value="${escapeHtml((replacements[i] && replacements[i].with) || '')}" placeholder="New text"></div></div>`).join('')}
-    </div>
-    <div id="htmlEditorPanel" class="editor-panel ${activeMode === 'html' ? '' : 'hidden'}">
-      <p class="hint">Advanced editor. Use this only when you need full control over the HTML file. The customer receives this saved final version.</p>
-      <textarea id="finalHtmlPlanEditor" name="finalHtmlPlan" style="min-height:340px;font-family:Consolas,monospace;font-size:12px;line-height:1.45;white-space:pre-wrap" spellcheck="false">${escapeHtml(editablePlanHtml)}</textarea>
-    </div>
     <h2>Payment and Clinical Tracking</h2>
     <div class="grid">
       <div><div class="label">Actual amount paid</div><input type="text" name="actualAmountPaid" value="${escapeHtml(review.actualAmountPaid || '')}" placeholder="e.g. UGX 120,000"></div>
@@ -1750,90 +4673,7 @@ function adminReviewPage(order, message = '', mode = 'plan') {
       <button class="btn danger" name="intent" value="reject">Reject order</button>
     </div>
   </form>
-  <div class="panel"><h2>Live Plan Preview</h2><p class="hint">This preview updates as you edit. Click save or approve to store the version you want the customer to receive.</p><div class="preview"><iframe id="finalPlanPreview" src="/admin/orders/${escapeHtml(order.id)}/plan"></iframe></div></div>
-  <script>
-  (function(){
-    var basePlanHtml = ${editablePlanJson};
-    var editor = document.getElementById('finalHtmlPlanEditor');
-    var frame = document.getElementById('finalPlanPreview');
-    var planPanel = document.getElementById('planEditorPanel');
-    var htmlPanel = document.getElementById('htmlEditorPanel');
-    var editPlanButton = document.getElementById('editPlanButton');
-    var editHtmlButton = document.getElementById('editHtmlButton');
-    var simpleFields = Array.prototype.slice.call(document.querySelectorAll('.simple-plan-field'));
-    if (!editor || !frame) return;
-    function esc(value){
-      return String(value || '').replace(/[&<>"']/g, function(ch){
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
-      });
-    }
-    function field(name){
-      var el = document.querySelector('[name="' + name + '"]');
-      return el ? el.value.trim() : '';
-    }
-    function block(title, value){
-      if (!value) return '';
-      return '<div style="background:#fff;border:1px solid #e2dbcf;border-radius:8px;padding:10px;margin-top:8px"><strong style="color:#1e3a1a">' + esc(title) + '</strong><div style="margin-top:4px;white-space:pre-wrap">' + esc(value) + '</div></div>';
-    }
-    function buildSimpleSection(){
-      var content = [
-        block('Client greeting', field('planGreeting')),
-        block('Patient-facing guidance', field('planExtraGuidance')),
-        block('Meal notes', field('planMealNotes')),
-        block('Ingredients notes', field('planIngredients')),
-        block('Preparation notes', field('planPreparation')),
-        block('Portion guide notes', field('planPortions')),
-        block('Smart swaps', field('planSwaps')),
-        block('Shopping list notes', field('planShopping')),
-        block('Exercise section', field('planExercise')),
-        block('Follow-up notes', field('planFollowup'))
-      ].filter(Boolean).join('');
-      if (!content) return '';
-      return '<div class="sec" data-admin-simple-edits="true"><div class="sh"><div class="si o">ED</div><div class="st">Breyer\\'s Plan Edits</div></div><div style="background:linear-gradient(135deg,#fdf8f0,#ede8df);border-radius:9px;padding:14px;border-left:4px solid #1e3a1a;font-size:12.5px;line-height:1.75">' + content + '</div></div>';
-    }
-    function applyReplacements(html){
-      var output = String(html || '');
-      [1,2,3].forEach(function(n){
-        var find = field('replaceFind' + n);
-        var replacement = field('replaceWith' + n);
-        if (!find) return;
-        output = output.split(find).join(replacement);
-      });
-      return output;
-    }
-    function insertSimpleSection(html, section){
-      var cleaned = String(html || '').replace(/<div class="sec" data-admin-simple-edits="true">[\\s\\S]*?<\\/div>\\s*<\\/div>/, '');
-      if (!section) return cleaned;
-      var marker = '<div class="body">';
-      if (cleaned.indexOf(marker) >= 0) return cleaned.replace(marker, marker + section);
-      return cleaned.replace('</body>', section + '</body>');
-    }
-    function buildFromSimpleFields(){
-      return insertSimpleSection(applyReplacements(basePlanHtml), buildSimpleSection());
-    }
-    function refreshPreview(){
-      frame.srcdoc = editor.value || '<!doctype html><html><body><p>No plan content yet.</p></body></html>';
-    }
-    function refreshFromSimple(){
-      editor.value = buildFromSimpleFields();
-      refreshPreview();
-    }
-    function setMode(mode){
-      var useHtml = mode === 'html';
-      if (planPanel) planPanel.classList.toggle('hidden', useHtml);
-      if (htmlPanel) htmlPanel.classList.toggle('hidden', !useHtml);
-      if (editPlanButton) editPlanButton.classList.toggle('active', !useHtml);
-      if (editHtmlButton) editHtmlButton.classList.toggle('active', useHtml);
-      if (!useHtml) refreshFromSimple();
-      else refreshPreview();
-    }
-    simpleFields.forEach(function(el){ el.addEventListener('input', refreshFromSimple); });
-    if (editPlanButton) editPlanButton.addEventListener('click', function(){ setMode('plan'); });
-    if (editHtmlButton) editHtmlButton.addEventListener('click', function(){ setMode('html'); });
-    editor.addEventListener('input', refreshPreview);
-    setMode('${activeMode}');
-  })();
-  </script>
+  <div class="panel"><h2>Plan Preview</h2><div class="preview"><iframe src="/admin/orders/${escapeHtml(order.id)}/plan"></iframe></div></div>
   </div></body></html>`;
 }
 
@@ -1844,9 +4684,10 @@ function saveAdminReview(order, form) {
   order.reviewHistory.push({ at: next.updatedAt, type: form.intent || 'save', adminReview: next });
   order.adminReview = next;
   order.adminNote = String(form.note || order.adminNote || '').trim();
-  const submittedFinalHtml = String(form.finalHtmlPlan || '').trim();
-  order.finalHtmlPlan = submittedFinalHtml || applyAdminAmendments(order);
-  order.finalHtmlHash = createHash('sha256').update(order.finalHtmlPlan).digest('hex');
+  if (!order.finalHtmlPlan) {
+    order.finalHtmlPlan = applyAdminAmendments(order);
+    order.finalHtmlHash = createHash('sha256').update(order.finalHtmlPlan).digest('hex');
+  }
   order.updatedAt = next.updatedAt;
 }
 
@@ -1864,10 +4705,10 @@ function followupPage(order, message = '') {
   const latest = Array.isArray(order.followups) && order.followups.length ? order.followups[order.followups.length - 1] : null;
   return `<!doctype html><html><head><meta charset="utf-8"><title>Bulamu360 Follow-up</title>
   <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:860px;margin:0 auto;padding:28px}.card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 10px 35px #0001;margin-bottom:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;font-weight:800;margin-bottom:5px}input,select,textarea{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:12px;font:14px Arial,sans-serif;background:#fffdf9}textarea{min-height:90px}.btn{border:0;background:#1e3a1a;color:#fff;padding:13px 18px;border-radius:10px;font-weight:800;cursor:pointer}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}.sched{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.sched div{background:#faf7f1;border:1px solid #e2dbcf;border-radius:10px;padding:10px;font-size:12px;line-height:1.45}@media(max-width:700px){.grid,.sched{grid-template-columns:1fr}}</style>
-  </head><body><div class="wrap"><div class="card"><h1>Bulamu360 Progress Review</h1><p>Hello ${escapeHtml(order.name)}, use this form to tell Breyer how the plan is working in real life.</p><p><strong>Plan:</strong> ${escapeHtml(order.packageName)} · <strong>Approved:</strong> ${escapeHtml(order.approvedAt || '')}</p></div>
+  </head><body><div class="wrap"><div class="card"><h1>Bulamu360 Progress Review</h1><p>Hello ${escapeHtml(order.name)}, use this form to tell Breyer how the plan is working in real life.</p><p><strong>Plan:</strong> ${escapeHtml(order.packageName)} - <strong>Approved:</strong> ${escapeHtml(order.approvedAt || '')}</p></div>
   ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
   <div class="card"><h2>Review Schedule</h2><div class="sched">${followupSchedule().map(s => `<div><strong>${escapeHtml(s.label)}</strong><br>${escapeHtml(s.purpose)}</div>`).join('')}</div></div>
-  ${latest ? `<div class="card"><h2>Latest Submission</h2><p>${escapeHtml(new Date(latest.createdAt).toLocaleString())} · ${escapeHtml(latest.reviewPoint || '')}</p><p><strong>Admin response:</strong> ${escapeHtml(latest.adminAdjustment && latest.adminAdjustment.action ? latest.adminAdjustment.action : 'Pending review')}</p></div>` : ''}
+  ${latest ? `<div class="card"><h2>Latest Submission</h2><p>${escapeHtml(new Date(latest.createdAt).toLocaleString())} - ${escapeHtml(latest.reviewPoint || '')}</p><p><strong>Admin response:</strong> ${escapeHtml(latest.adminAdjustment && latest.adminAdjustment.action ? latest.adminAdjustment.action : 'Pending review')}</p></div>` : ''}
   <form class="card" method="post" action="/followup/${escapeHtml(order.followupToken)}">
     <h2>Submit Progress</h2>
     <div class="grid">
@@ -1947,11 +4788,15 @@ async function handleReview(req, res, id) {
   const db = readDb();
   const order = findOrder(db, id);
   if (!order) return sendHtml(res, 404, 'Order not found');
-  const url = new URL(req.url || '/', `http://${req.headers.host}`);
-  const mode = url.searchParams.get('mode') === 'html' ? 'html' : 'plan';
-  if (req.method === 'GET') return sendHtml(res, 200, adminReviewPage(order, '', mode));
+  if (req.method === 'GET') return sendHtml(res, 200, adminReviewPage(order));
   const form = await readForm(req);
   saveAdminReview(order, form);
+  auditAdminAction(db, req, 'admin-review', {
+    orderId: order.id,
+    customer: order.email,
+    intent: String(form.intent || 'save'),
+    checklistComplete: Boolean(order.adminReview && order.adminReview.checklistComplete)
+  });
   if (form.intent === 'reject') {
     order.status = 'rejected';
     order.rejectedAt = order.updatedAt;
@@ -1962,13 +4807,45 @@ async function handleReview(req, res, id) {
   if (form.intent === 'approve') {
     if (!order.adminReview.checklistComplete) {
       writeDb(db);
-      return sendHtml(res, 400, adminReviewPage(order, 'Complete every approval checklist item before approving.', mode));
+      return sendHtml(res, 400, adminReviewPage(order, 'Complete every approval checklist item before approving.'));
     }
     approveOrder(db, order, form);
     return redirect(res, '/admin?status=pending');
   }
   writeDb(db);
-  return sendHtml(res, 200, adminReviewPage(order, 'Review notes saved.', mode));
+  return sendHtml(res, 200, adminReviewPage(order, 'Review notes saved.'));
+}
+
+async function handleDeleteOrder(req, res, id) {
+  const db = readDb();
+  const index = db.orders.findIndex(o => o.id === id);
+  if (index < 0) return sendHtml(res, 404, 'Order not found');
+  if (req.method === 'GET') return sendHtml(res, 200, deleteOrderPage(db.orders[index]));
+  const form = await readForm(req);
+  const [removed] = db.orders.splice(index, 1);
+  db.deletedOrders = Array.isArray(db.deletedOrders) ? db.deletedOrders : [];
+  db.deletedOrders.unshift({
+    id: removed.id,
+    deletedAt: new Date().toISOString(),
+    reason: String(form.deleteReason || '').trim(),
+    name: removed.name || '',
+    email: removed.email || '',
+    packageName: removed.packageName || '',
+    amount: removed.amount || '',
+    status: removed.status || '',
+    txRef: removed.txRef || '',
+    createdAt: removed.createdAt || ''
+  });
+  auditAdminAction(db, req, 'order-delete', {
+    orderId: removed.id,
+    customer: removed.email,
+    packageName: removed.packageName,
+    status: removed.status,
+    reason: String(form.deleteReason || '').trim()
+  });
+  db.deletedOrders = db.deletedOrders.slice(0, 500);
+  writeDb(db);
+  redirect(res, '/admin');
 }
 
 function approveOrder(db, order, form = {}) {
@@ -1979,9 +4856,7 @@ function approveOrder(db, order, form = {}) {
   order.approvalCode = order.approvalCode || makeApprovalCode();
   order.downloadToken = order.downloadToken || makeDownloadToken();
   order.followupToken = order.followupToken || makeFollowupToken();
-  if (Object.keys(form).length) order.adminReview = reviewFromForm(form, order.adminReview || {});
-  const submittedFinalHtml = String(form.finalHtmlPlan || '').trim();
-  order.finalHtmlPlan = submittedFinalHtml || applyAdminAmendments(order);
+  order.finalHtmlPlan = order.finalHtmlPlan || applyAdminAmendments(order);
   order.finalHtmlHash = createHash('sha256').update(order.finalHtmlPlan).digest('hex');
   writeDb(db);
   queueOrderEmail(order, 'approval', () => sendApprovalEmail(order));
@@ -2000,7 +4875,7 @@ function adminFollowupsPage() {
     return `<tr>
       <td><strong>${escapeHtml(order.name)}</strong><br><small>${escapeHtml(order.email)}<br>${escapeHtml(order.phone)}</small></td>
       <td>${escapeHtml(followup.reviewPoint)}<br><small>${escapeHtml(new Date(followup.createdAt).toLocaleString())}</small></td>
-      <td><small>Weight: ${escapeHtml(followup.weight || '-')} · Waist: ${escapeHtml(followup.waist || '-')}</small><br><small>Reading: ${escapeHtml(followup.clinicalReading || '-')}</small><br><small>Energy: ${escapeHtml(followup.energy || '-')} · Adherence: ${escapeHtml(followup.adherence || '-')}</small></td>
+      <td><small>Weight: ${escapeHtml(followup.weight || '-')} - Waist: ${escapeHtml(followup.waist || '-')}</small><br><small>Reading: ${escapeHtml(followup.clinicalReading || '-')}</small><br><small>Energy: ${escapeHtml(followup.energy || '-')} - Adherence: ${escapeHtml(followup.adherence || '-')}</small></td>
       <td><small>Trend: ${escapeHtml(followup.outcomeTrend || '-')}</small><br><small>Taste: ${escapeHtml(followup.tasteSatisfaction || '-')} / 10</small><br><small>Budget: ${escapeHtml(followup.budgetDifficulty || '-')} - Cook: ${escapeHtml(followup.cookingDifficulty || '-')} - Availability: ${escapeHtml(followup.foodAvailabilityDifficulty || '-')}</small><br><small>Prep burden: ${escapeHtml(followup.mealPrepBurden || '-')}</small></td>
       <td>${escapeHtml(shortText(followup.symptoms || followup.requestedSubstitutions || followup.question || 'No concern written', 180))}</td>
       <td>${adj.action ? `<span class="badge approved">${escapeHtml(adj.action)}</span><br><small>${escapeHtml(adj.updatedAt || '')}</small>` : '<span class="badge pending">Pending review</span>'}</td>
@@ -2024,7 +4899,7 @@ function adminFollowupReviewPage(order, followup, message = '') {
   const adj = followup.adminAdjustment || {};
   return `<!doctype html><html><head><meta charset="utf-8"><title>Review Follow-up</title>
   <style>body{font-family:Arial,sans-serif;background:#f7f3ec;color:#2a1f14;margin:0}.wrap{max-width:980px;margin:0 auto;padding:28px}.card{background:#fff;border-radius:18px;padding:22px;box-shadow:0 10px 35px #0001;margin-bottom:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a7a68;font-weight:800;margin-bottom:4px}.box{background:#faf7f1;border:1px solid #e2dbcf;border-radius:10px;padding:11px;line-height:1.55}select,textarea{width:100%;box-sizing:border-box;border:1px solid #d8d0c4;border-radius:10px;padding:11px;font:14px Arial,sans-serif;background:#fffdf9}textarea{min-height:92px}.btn{border:0;background:#1e3a1a;color:#fff;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer}.ghost{display:inline-block;background:#ede8df;color:#2a1f14;text-decoration:none}.msg{background:#e4f5dd;color:#1e3a1a;border-left:4px solid #1e3a1a;padding:11px 13px;border-radius:10px;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}}</style></head>
-  <body><div class="wrap"><div class="card"><h1>Follow-up Review</h1><p>${escapeHtml(order.name)} · ${escapeHtml(order.packageName)} · ${escapeHtml(followup.reviewPoint)}</p><a class="btn ghost" href="/admin/followups">Back to follow-ups</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Order review</a></div>
+  <body><div class="wrap"><div class="card"><h1>Follow-up Review</h1><p>${escapeHtml(order.name)} - ${escapeHtml(order.packageName)} - ${escapeHtml(followup.reviewPoint)}</p><a class="btn ghost" href="/admin/followups">Back to follow-ups</a> <a class="btn ghost" href="/admin/orders/${escapeHtml(order.id)}/review">Order review</a></div>
   ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ''}
   <div class="card"><h2>Customer Submission</h2><div class="grid">
     <div class="box"><div class="label">Measurements</div>Weight: ${escapeHtml(followup.weight || '-')}<br>Waist: ${escapeHtml(followup.waist || '-')}<br>Reading: ${escapeHtml(followup.clinicalReading || '-')}</div>
@@ -2066,6 +4941,13 @@ async function handleAdminFollowupReview(req, res, orderId, followupId) {
     updatedAt: new Date().toISOString()
   };
   order.updatedAt = followup.adminAdjustment.updatedAt;
+  auditAdminAction(db, req, 'followup-adjustment', {
+    orderId: order.id,
+    customer: order.email,
+    followupId: followup.id,
+    action: followup.adminAdjustment.action,
+    escalationStatus: followup.adminAdjustment.escalationStatus
+  });
   writeDb(db);
   await sendFollowupAdjustmentEmail(order, followup).catch(err => {
     order.emailLog = Array.isArray(order.emailLog) ? order.emailLog : [];
@@ -2081,6 +4963,8 @@ async function handleFollowupReminder(req, res, id) {
   const order = findOrder(db, id);
   if (!order || order.status !== 'approved') return sendHtml(res, 404, 'Approved order not found');
   const reviewPoint = String(form.reviewPoint || 'progress review').trim();
+  auditAdminAction(db, req, 'followup-reminder', { orderId: order.id, customer: order.email, reviewPoint });
+  writeDb(db);
   await sendFollowupReminderEmail(order, reviewPoint).catch(err => {
     order.emailLog = Array.isArray(order.emailLog) ? order.emailLog : [];
     order.emailLog.push({ at: new Date().toISOString(), type: 'followup-reminder', error: err.message, reviewPoint });
@@ -2122,6 +5006,7 @@ async function handleApprove(req, res, id) {
   const order = findOrder(db, id);
   if (!order) return sendHtml(res, 404, 'Order not found');
   if (!(order.adminReview && order.adminReview.checklistComplete)) return redirect(res, `/admin/orders/${encodeURIComponent(id)}/review`);
+  auditAdminAction(db, req, 'order-approve', { orderId: order.id, customer: order.email });
   approveOrder(db, order, form);
   redirect(res, '/admin?status=pending');
 }
@@ -2135,6 +5020,7 @@ async function handleReject(req, res, id) {
   order.updatedAt = new Date().toISOString();
   order.rejectedAt = order.updatedAt;
   order.adminNote = form.note || '';
+  auditAdminAction(db, req, 'order-reject', { orderId: order.id, customer: order.email, note: order.adminNote });
   writeDb(db);
   queueOrderEmail(order, 'rejection', () => sendRejectionEmail(order));
   redirect(res, '/admin?status=pending');
@@ -2144,6 +5030,8 @@ async function handleResend(req, res, id) {
   const db = readDb();
   const order = findOrder(db, id);
   if (!order || order.status !== 'approved') return sendHtml(res, 404, 'Approved order not found');
+  auditAdminAction(db, req, 'plan-email-resend', { orderId: order.id, customer: order.email });
+  writeDb(db);
   queueOrderEmail(order, 'resend', () => sendApprovalEmail(order));
   redirect(res, '/admin?status=approved');
 }
@@ -2154,7 +5042,7 @@ function csvEscape(value) {
 
 function exportCsv(res) {
   const db = readDb();
-  const header = ['id','createdAt','status','name','email','phone','customerSource','customerType','referralCode','packageName','amount','orderType','consultationAddon','network','txRef','approvalCode','riskScore','confidence','safetyStatus','safetyLabel','auditScore','auditStatus','auditLabel','auditBlockers','auditWarnings','auditUniqueMeals','auditWeeks','adminReviewComplete','adminClinicalNote','customerReleaseNote','adminApprovalCondition','adminRequestedLab','adminDietaryCorrection','adminFollowUpInstruction','actualAmountPaid','paymentVerifier','paymentMismatchReason','urgencyLevel','clinicianReferralRecommended','referralReason','redFlagSymptoms','medicationClass','adminOverrideReason','planVersion','rulesEngineVersion','recipeDatabaseVersion','rulesOverall','ruleReview','ruleCaution','contraindications','reviewGates','cautions','conditionChapters','diagnosis','allergies','symptoms','waist','waistRisk','adminNote'];
+  const header = ['id','createdAt','status','name','email','phone','customerSource','customerType','referralCode','packageName','amount','orderType','consultationAddon','network','txRef','approvalCode','riskScore','confidence','safetyStatus','safetyLabel','auditScore','auditStatus','auditLabel','auditBlockers','auditWarnings','auditUniqueMeals','auditWeeks','adminReviewComplete','adminClinicalNote','customerReleaseNote','adminApprovalCondition','adminRequestedLab','adminDietaryCorrection','adminFollowUpInstruction','actualAmountPaid','paymentVerifier','paymentMismatchReason','urgencyLevel','clinicianReferralRecommended','referralReason','redFlagSymptoms','medicationClass','adminOverrideReason','planVersion','rulesEngineVersion','recipeDatabaseVersion','rulesOverall','ruleReview','ruleCaution','contraindications','reviewGates','cautions','conditionChapters','diagnosis','diagnosisDate','allergies','foodDislikes','culturalFoods','symptoms','redFlags','monitoring','clinicianStatus','specialStatus','waist','waistRisk','adminNote'];
   const rows = db.orders.map(o => {
     const cs = o.clinicalSummary || {};
     const safety = cs.safetyDecision || {};
@@ -2206,8 +5094,15 @@ function exportCsv(res) {
       cautions: Array.isArray(safety.caution) ? safety.caution.join(' | ') : '',
       conditionChapters: Array.isArray(cs.conditionChapters) ? cs.conditionChapters.map(c => c.title).filter(Boolean).join(' | ') : '',
       diagnosis: cs.diagnosis || '',
+      diagnosisDate: cs.diagnosisDate || '',
       allergies: cs.allergies || '',
+      foodDislikes: cs.foodDislikes || '',
+      culturalFoods: cs.culturalFoods || '',
       symptoms: cs.symptoms || '',
+      redFlags: cs.redFlags || '',
+      monitoring: cs.monitoring || '',
+      clinicianStatus: cs.clinicianStatus || '',
+      specialStatus: cs.specialStatus || '',
       waist: cs.waist || '',
       waistRisk: cs.waistRisk || ''
     };
@@ -2220,10 +5115,103 @@ function exportCsv(res) {
   res.end([header.join(','), ...rows].join('\n'));
 }
 
+function exportLeadsCsv(res) {
+  const db = readDb();
+  const header = ['id','createdAt','updatedAt','status','name','email','phone','goal','planType','bmi','conditions','customerSource','referralCode','marketingStage','paidOrderId','consentAccepted','consentAt','consentVersion','age','sex','height','weight','activity','budget','cooking','allergies','foodDislikes','symptoms','redFlags'];
+  const rows = (db.leads || []).map(l => {
+    const p = l.profile || {};
+    const row = {
+      id: l.id,
+      createdAt: l.createdAt,
+      updatedAt: l.updatedAt,
+      status: l.status,
+      name: l.name,
+      email: l.email,
+      phone: l.phone,
+      goal: l.goal,
+      planType: l.planType,
+      bmi: l.bmi,
+      conditions: Array.isArray(l.conditions) ? l.conditions.join('; ') : '',
+      customerSource: l.customerSource,
+      referralCode: l.referralCode,
+      marketingStage: l.marketingStage,
+      paidOrderId: l.paidOrderId,
+      consentAccepted: l.consentAccepted ? 'yes' : 'no',
+      consentAt: l.consentAt,
+      consentVersion: l.consentVersion,
+      age: p.age,
+      sex: p.sex,
+      height: p.height,
+      weight: p.weight,
+      activity: p.activity,
+      budget: p.budget,
+      cooking: p.cooking,
+      allergies: p.allergies,
+      foodDislikes: p.foodDislikes,
+      symptoms: p.symptoms,
+      redFlags: p.redFlags
+    };
+    return header.map(key => csvEscape(row[key])).join(',');
+  });
+  res.writeHead(200, securityHeaders({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-free-assessment-leads.csv"'
+  }));
+  res.end([header.join(','), ...rows].join('\n'));
+}
+
+function exportMemberProgressCsv(res) {
+  const db = readDb();
+  const header = ['id','createdAt','email','name','orderId','weight','waist','bloodPressure','bloodSugar','hunger','mood','energy','sleep','cravings','bowelHabits','symptoms','cyclePregnancyNotes','notes'];
+  const rows = (db.progressEntries || []).map(row => header.map(k => csvEscape(row[k])).join(','));
+  res.writeHead(200, securityHeaders({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-member-progress.csv"'
+  }));
+  res.end([header.join(','), ...rows].join('\n'));
+}
+
+function exportFoodDiaryCsv(res) {
+  const db = readDb();
+  const header = ['id','createdAt','email','name','orderId','mealTime','meal','portion','hungerBefore','fullnessAfter','taste','cost','symptomsAfter','dislikedRepeated','replacementRequest'];
+  const rows = (db.foodDiary || []).map(row => header.map(k => csvEscape(row[k])).join(','));
+  res.writeHead(200, securityHeaders({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-food-diary.csv"'
+  }));
+  res.end([header.join(','), ...rows].join('\n'));
+}
+
+function exportCoachQueueCsv(res) {
+  const header = ['email','name','phone','severity','score','latestAt','plan','orderStatus','progressCount','diaryCount','signals'];
+  const rows = buildCoachReviewQueue().map(item => {
+    const order = item.latestOrder || {};
+    const row = {
+      email: item.email,
+      name: item.name,
+      phone: item.phone,
+      severity: item.severity,
+      score: item.score,
+      latestAt: item.latestAt,
+      plan: order.packageName || '',
+      orderStatus: order.status || '',
+      progressCount: item.progressCount,
+      diaryCount: item.diaryCount,
+      signals: item.signals.map(s => `${s.label}: ${s.detail}`).join(' | ')
+    };
+    return header.map(k => csvEscape(row[k])).join(',');
+  });
+  res.writeHead(200, securityHeaders({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="bulamu360-coach-review-queue.csv"'
+  }));
+  res.end([header.join(','), ...rows].join('\n'));
+}
+
 function servePlanByOrder(res, order, download = false, audience = 'patient') {
   if (!order) return sendHtml(res, 404, 'Plan not found');
-  const headers = download ? { 'Content-Disposition': `attachment; filename="Bulamu360_Plan_${order.name.replace(/[^\w.-]+/g, '_')}.html"` } : {};
-  sendHtml(res, 200, planHtmlForOrder(order, { audience }), headers);
+  const headers = download ? { 'Content-Disposition': `attachment; filename="${planAttachmentFileName(order)}"` } : {};
+  sendHtml(res, 200, sanitizePlanHtml(planHtmlForOrder(order, { audience })), headers);
 }
 
 function isPrivateStaticPath(requested) {
@@ -2244,7 +5232,7 @@ async function serveStatic(req, res) {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   const originalPath = decodeURIComponent(url.pathname);
   let requested = originalPath;
-  if (requested === '/') requested = '/bulamu360-website.html';
+  if (requested === '/') requested = '/bulamu360-source.html';
   if (requested === '/website') requested = '/bulamu360-website.html';
   if (requested === '/app') requested = '/bulamu360-source.html';
   if (requested === '/privacy') requested = '/privacy.html';
@@ -2259,9 +5247,11 @@ async function serveStatic(req, res) {
   if (!fullPath.startsWith(root)) return sendHtml(res, 403, 'Forbidden');
   try {
     const file = await readFile(fullPath);
+    const ext = extname(fullPath);
+    const isStaticAsset = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico', '.css', '.js'].includes(ext);
     res.writeHead(200, securityHeaders({
-      'Content-Type': mimeTypes[extname(fullPath)] || 'application/octet-stream',
-      'Cache-Control': extname(fullPath) === '.html' ? 'no-store' : 'public, max-age=300'
+      'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+      'Cache-Control': ext === '.html' ? 'no-store' : (isStaticAsset ? 'public, max-age=31536000, immutable' : 'public, max-age=300')
     }));
     res.end(file);
   } catch {
@@ -2878,30 +5868,74 @@ async function handleTrackerAdminRoutes(req, res, url) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    res._corsOrigin = corsOriginForRequest(req);
     if (req.method === 'OPTIONS') return sendJson(res, 204, {});
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     if (req.method === 'GET' && url.pathname === '/health') return sendJson(res, 200, healthPayload());
     if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, healthPayload());
+    if (req.method === 'GET' && url.pathname === '/api/member-status') return sendJson(res, 200, memberAccessStatus(req));
+    if (req.method === 'POST' && url.pathname === '/api/leads' && !rateLimit(req, res, 'create-lead', { limit: 30, windowMs: 60_000 })) return;
     if (req.method === 'POST' && url.pathname === '/api/orders' && !rateLimit(req, res, 'create-order', { limit: 20, windowMs: 60_000 })) return;
     if (req.method === 'POST' && url.pathname === '/api/unlock-plan' && !rateLimit(req, res, 'unlock-plan', { limit: 20, windowMs: 60_000 })) return;
     if (req.method === 'POST' && url.pathname === '/api/recipe-pool' && !rateLimit(req, res, 'recipe-pool', { limit: 40, windowMs: 60_000 })) return;
+    if (req.method === 'POST' && url.pathname === '/api/leads') return handleCreateLead(req, res);
     if (req.method === 'POST' && url.pathname === '/api/orders') return handleCreateOrder(req, res);
     if (req.method === 'POST' && url.pathname === '/api/unlock-plan') return handleUnlockPlan(req, res);
     if (req.method === 'POST' && url.pathname === '/api/recipe-pool') return handleRecipePool(req, res);
     if (await handleTrackerPublicRoutes(req, res, url)) return;
+    if (req.method === 'GET' && url.pathname === '/member/login') return sendHtml(res, 200, memberLoginPage());
+    if (req.method === 'POST' && url.pathname === '/member/login') return handleMemberLogin(req, res);
+    if (req.method === 'GET' && url.pathname === '/member/logout') {
+      const sid = getCookie(req, 'bulamu_member');
+      if (sid) sessions.delete(`member:${sid}`);
+      res.writeHead(302, securityHeaders({ Location: '/member/login', 'Set-Cookie': memberSessionCookie('', 0) }));
+      return res.end();
+    }
+    if (req.method === 'GET' && url.pathname === '/member') {
+      const member = requireMember(req, res);
+      if (!member) return;
+      return sendHtml(res, 200, memberDashboardPage(req, member));
+    }
+    if (req.method === 'POST' && url.pathname === '/member/progress') {
+      if (!verifySameOriginPost(req, res)) return;
+      const member = requireMember(req, res);
+      if (!member) return;
+      return handleMemberProgress(req, res, member);
+    }
+    if (req.method === 'POST' && url.pathname === '/member/food-diary') {
+      if (!verifySameOriginPost(req, res)) return;
+      const member = requireMember(req, res);
+      if (!member) return;
+      return handleMemberFoodDiary(req, res, member);
+    }
     if (req.method === 'GET' && url.pathname === '/admin/login') return sendHtml(res, 200, adminLoginPage());
-    if (req.method === 'POST' && url.pathname === '/admin/login') return handleAdminLogin(req, res);
+    if (req.method === 'POST' && url.pathname === '/admin/login') {
+      if (!verifySameOriginPost(req, res)) return;
+      return handleAdminLogin(req, res);
+    }
     if (req.method === 'GET' && url.pathname === '/admin/logout') {
       res.writeHead(302, securityHeaders({ Location: '/admin/login', 'Set-Cookie': adminSessionCookie('', 0) }));
       return res.end();
     }
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
       if (!requireAdmin(req, res)) return;
+      if (req.method !== 'GET' && !verifySameOriginPost(req, res)) return;
       if (req.method === 'GET' && url.pathname === '/admin') return sendHtml(res, 200, adminDashboard(req));
       if (req.method === 'GET' && url.pathname === '/admin/system') return sendHtml(res, 200, adminSystemPage());
+      if (req.method === 'GET' && url.pathname === '/admin/audit') return sendHtml(res, 200, adminAuditPage());
+      if (req.method === 'GET' && url.pathname === '/admin/backup.json') return exportBackupJson(res);
       if (req.method === 'GET' && url.pathname === '/admin/orders.csv') return exportCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/leads.csv') return exportLeadsCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/member-progress.csv') return exportMemberProgressCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/food-diary.csv') return exportFoodDiaryCsv(res);
       if (req.method === 'GET' && url.pathname === '/admin/followups') return sendHtml(res, 200, adminFollowupsPage());
       if (req.method === 'GET' && url.pathname === '/admin/followups.csv') return exportFollowupsCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/coach-queue') return sendHtml(res, 200, adminCoachQueuePage());
+      if (req.method === 'GET' && url.pathname === '/admin/coach-queue.csv') return exportCoachQueueCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/replacements') return sendHtml(res, 200, adminReplacementQueuePage());
+      if (req.method === 'GET' && url.pathname === '/admin/replacements.csv') return exportReplacementQueueCsv(res);
+      if (req.method === 'GET' && url.pathname === '/admin/plan-fit') return sendHtml(res, 200, adminPlanFitPage());
+      if (req.method === 'GET' && url.pathname === '/admin/plan-fit.csv') return exportPlanFitCsv(res);
       if (req.method === 'GET' && url.pathname === '/admin/insights') return sendHtml(res, 200, adminInsightsPage());
       if (req.method === 'GET' && url.pathname === '/admin/insights.csv') return exportInsightsCsv(res);
       if (req.method === 'GET' && url.pathname === '/admin/recipes') return sendHtml(res, 200, adminRecipeIntelligencePage());
@@ -2909,10 +5943,13 @@ const server = http.createServer(async (req, res) => {
       if (await handleTrackerAdminRoutes(req, res, url)) return;
       const followupMatch = url.pathname.match(/^\/admin\/orders\/([^/]+)\/followups\/([^/]+)$/);
       if (followupMatch) return handleAdminFollowupReview(req, res, followupMatch[1], followupMatch[2]);
-      const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|review|reminder)$/);
+      const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|review|reminder|delete|edit|content)$/);
       if (match) {
         const [, id, action] = match;
         const db = readDb();
+        if (action === 'content') return handlePlanContentEditor(req, res, id);
+        if (action === 'edit') return handlePlanEditor(req, res, id);
+        if (action === 'delete') return handleDeleteOrder(req, res, id);
         if (action === 'review') return handleReview(req, res, id);
         if (req.method === 'POST' && action === 'approve') return handleApprove(req, res, id);
         if (req.method === 'POST' && action === 'reject') return handleReject(req, res, id);
@@ -2931,6 +5968,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/followup/')) {
       const token = url.pathname.split('/').pop();
+      if (req.method === 'POST' && !rateLimit(req, res, 'followup-submit', { limit: 8, windowMs: 60_000 })) return;
       if (req.method === 'GET' || req.method === 'POST') return handleFollowup(req, res, token);
     }
     if (req.method === 'GET') return serveStatic(req, res);

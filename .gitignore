@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+data/orders.json
+*.log
+server.cmd.out.log
+server.cmd.err.log
+node_modules/
+.DS_Store
+Thumbs.db
