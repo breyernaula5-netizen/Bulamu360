@@ -3,320 +3,525 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bulamu360 | Your Personal Nutrition Coach, Anytime</title>
-  <meta name="description" content="Bulamu360 provides personalised nutrition plans, recipe guidance, follow-up support, and dietitian-informed wellness coaching for everyday Ugandan and global lifestyles.">
-  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --earth1:#1e3a1a;
-      --earth2:#2d5c24;
-      --earth3:#00cc00;
-      --earth4:#5ea84a;
-      --earth5:#9dd48a;
-      --earth6:#d4eecc;
-      --warm1:#7a3c10;
-      --warm2:#c06820;
-      --cream:#f7f3ec;
-      --parchment:#ede8df;
-      --linen:#e2dbcf;
-      --ink:#2a1f14;
-      --mid:#5a4a38;
-      --muted:#8a7a68;
-      --white:#fff;
-      --shadow:0 18px 60px rgba(42,31,20,.12);
-      --r1:9px;
-      --r2:12px;
-      --r3:18px;
-    }
-    *{box-sizing:border-box}
-    html{scroll-behavior:smooth}
-    body{margin:0;font-family:'Outfit',sans-serif;color:var(--ink);background:var(--cream);line-height:1.65;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-    h1,h2,h3,h4{font-family:'Libre Baskerville',serif;line-height:1.18}
-    a{text-decoration:none;color:inherit}
-    .nav{position:sticky;top:0;z-index:20;background:rgba(15,32,9,.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
-    .nav-inner{max-width:1200px;margin:0 auto;padding:15px 24px;display:flex;align-items:center;justify-content:space-between;gap:18px}
-    .brand{display:flex;align-items:center;gap:11px;font-weight:900;color:#fff}
-    .mark{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--earth2),var(--earth3));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;box-shadow:0 8px 24px rgba(0,204,0,.16)}
-    .brand span{display:block;font-family:'Libre Baskerville',serif;font-size:22px;line-height:1}
-    .brand small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-top:2px}
-    .nav-links{display:flex;align-items:center;gap:20px;color:rgba(255,255,255,.72);font-size:13px;font-weight:600}
-    .nav-links a:hover{color:var(--earth5)}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:13px 26px;border-radius:100px;font-weight:700;border:1px solid transparent;cursor:pointer;letter-spacing:.01em;transition:all .22s ease}
-    .btn:hover{transform:translateY(-2px)}
-    .btn-primary{background:linear-gradient(135deg,var(--earth1),var(--earth3));color:#fff;box-shadow:0 8px 26px rgba(30,58,26,.3)}
-    .btn-light{background:rgba(255,255,255,.92);color:var(--earth1);border-color:rgba(255,255,255,.22)}
-    .btn-clay{background:linear-gradient(135deg,var(--warm1),var(--warm2));color:#fff;box-shadow:0 8px 26px rgba(122,60,16,.26)}
-    .hero{min-height:calc(100vh - 71px);display:grid;place-items:end center;background:
-      radial-gradient(circle at 75% 35%,rgba(157,212,138,.18),transparent 34%),
-      linear-gradient(90deg,rgba(15,32,9,.94),rgba(30,58,26,.75),rgba(30,58,26,.22)),
-      url("https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=84") center/cover no-repeat;color:#fff}
-    .hero-inner{width:100%;max-width:1200px;padding:90px 24px 58px}
-    .hero-copy{max-width:760px}
-    .eyebrow{display:inline-flex;align-items:center;gap:9px;text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:600;color:var(--earth5);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:9px 13px;margin-bottom:18px}
-    h1{font-size:clamp(46px,6vw,76px);font-weight:700;line-height:1.04;margin:0 0 18px;letter-spacing:0;color:#fff}
-    h1 em{font-style:italic;color:var(--earth5)}
-    .hero p{font-size:20px;max-width:680px;color:rgba(255,255,255,.78);margin:0 0 28px;font-weight:300}
-    .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:30px}
-    .trust-row{display:flex;flex-wrap:wrap;gap:10px}
-    .trust-row span{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.13);border-radius:100px;padding:8px 13px;font-size:12px;font-weight:600;color:rgba(255,255,255,.82)}
-    section{padding:82px 24px}
-    .wrap{max-width:1200px;margin:0 auto}
-    .section-head{max-width:740px;margin-bottom:28px}
-    .section-head.center{text-align:center;margin-left:auto;margin-right:auto}
-    .kicker{text-transform:uppercase;letter-spacing:.2em;color:var(--earth3);font-size:11px;font-weight:600;margin:0 0 10px}
-    h2{font-size:42px;line-height:1.14;margin:0 0 12px;color:var(--earth1)}
-    h2 em{font-style:italic;color:var(--earth3)}
-    .section-head p{font-size:17px;color:var(--muted);margin:0}
-    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
-    .card{background:#fff;border:1px solid var(--linen);border-radius:var(--r3);padding:26px;box-shadow:0 4px 18px rgba(42,31,20,.07)}
-    .icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#ebf7e8,var(--earth6));display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--earth1);margin-bottom:15px}
-    .card h3{font-size:19px;margin:0 0 8px;color:var(--earth1)}
-    .card p{margin:0;color:var(--muted);font-size:15px}
-    .band{background:var(--linen)}
-    .how{counter-reset:steps}
-    .step{position:relative;padding-left:58px}
-    .step:before{counter-increment:steps;content:counter(steps);position:absolute;left:0;top:0;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--earth1),var(--earth3));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900}
-    .packages{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch}
-    .package{background:#fff;border:2px solid var(--linen);border-radius:var(--r3);padding:30px 26px;position:relative;box-shadow:0 4px 20px rgba(42,31,20,.07)}
-    .package.featured{background:linear-gradient(155deg,var(--earth1),var(--earth2));border-color:transparent;box-shadow:0 18px 50px rgba(30,58,26,.24);transform:scale(1.03);color:#fff}
-    .package.featured h3,.package.featured .price{color:#fff}
-    .package.featured ul{color:rgba(255,255,255,.78)}
-    .pill{display:inline-flex;background:var(--earth6);color:var(--earth1);border-radius:100px;padding:6px 11px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px}
-    .package.featured .pill{background:rgba(255,255,255,.12);color:var(--earth5);border:1px solid rgba(255,255,255,.14)}
-    .price{font-family:'Libre Baskerville',serif;font-size:38px;font-weight:700;color:var(--earth1);margin:10px 0}
-    .price small{font-size:13px;color:var(--muted);font-weight:700}
-    ul{padding-left:18px;margin:14px 0 0;color:var(--muted)}
-    li{margin:7px 0}
-    .split{display:grid;grid-template-columns:1.05fr .95fr;gap:32px;align-items:center}
-    .photo{min-height:470px;border-radius:var(--r3);background:url("https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=84") center/cover no-repeat;box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.7)}
-    .quote{background:linear-gradient(155deg,var(--earth1),var(--earth2));color:#fff;border-radius:var(--r3);padding:34px;box-shadow:var(--shadow)}
-    .quote p{font-family:'Libre Baskerville',serif;font-size:26px;line-height:1.42;margin:0 0 14px}
-    .quote small{color:rgba(255,255,255,.7)}
-    .faq{display:grid;gap:10px}
-    details{background:#fff;border:1px solid var(--linen);border-radius:var(--r2);padding:18px 20px;box-shadow:0 3px 12px rgba(42,31,20,.05)}
-    summary{cursor:pointer;font-weight:700;color:var(--earth1)}
-    details p{margin:10px 0 0;color:var(--muted)}
-    .cta{background:
-      radial-gradient(circle at 75% 35%,rgba(157,212,138,.14),transparent 36%),
-      linear-gradient(90deg,rgba(30,58,26,.97),rgba(45,92,36,.82)),
-      url("https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&w=1600&q=84") center/cover no-repeat;color:#fff}
-    .cta h2{color:#fff}
-    .cta .section-head p{color:rgba(255,255,255,.82)}
-    footer{padding:30px 24px;background:#0f2009;color:rgba(255,255,255,.68)}
-    footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
-    .fine{font-size:12px;max-width:720px}
-    @media(max-width:900px){
-      .nav-links{display:none}
-      h1{font-size:43px}
-      h2{font-size:32px}
-      .hero{min-height:auto}
-      .hero-inner{padding:72px 18px 38px}
-      .grid-3,.grid-2,.packages,.split{grid-template-columns:1fr}
-      section{padding:54px 18px}
-      .photo{min-height:320px}
-    }
-  </style>
+  <title>Bulamu360 | Nutrition Tracking &amp; Personal Nutrition Plans</title>
+  <meta name="description" content="Track your food, 70+ nutrients, weight, blood sugar, blood pressure, sleep and fasting for free — with Ugandan foods built in. Get a personal nutrition plan from registered dietitian Breyer Naula.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!-- B360:BRAND:START -->
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<meta name="theme-color" content="#0b4f2c">
+<meta name="theme-color" content="#0b2a1b">
 <!-- B360:BRAND:END -->
-<!-- B360:BRANDCSS:START -->
-<style id="b360-brand-style">
-.brand-logo-chip{display:inline-flex;align-items:center;background:#fff;border-radius:12px;padding:5px 12px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
-.brand-logo{display:block;height:42px;width:auto}
-.nav-tracker{font-weight:700}
-@media(max-width:600px){.brand-logo{height:34px}.brand-logo-chip{padding:4px 9px}}
-</style>
-<!-- B360:BRANDCSS:END -->
+  <style>
+    :root{
+      --forest:#0b2a1b; --forest-2:#123a26; --green:#1f8a4c; --green-2:#27a35c; --mint:#3cc97b; --mint-ink:#062414;
+      --sage:#e9f5ee; --sage-2:#d6ecde; --lime:#b9e4c9;
+      --ink:#16211b; --ink-2:#48564e; --muted:#6c7a72; --line:#e1e8e3; --paper:#ffffff; --bg:#f7faf8;
+      --red:#b80b0b; --protein:#1f8a4c; --carbs:#2f6f9f; --fat:#d9892b;
+      --r:14px; --r-lg:22px; --shadow:0 12px 40px rgba(11,42,27,.12);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+    body{margin:0;font-family:'Work Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased}
+    a{color:inherit}
+    img{max-width:100%}
+    .wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+    .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+    :focus-visible{outline:3px solid var(--mint);outline-offset:3px;border-radius:6px}
+
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 30px;border-radius:999px;font-weight:700;font-size:17px;text-decoration:none;border:2px solid transparent;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s;font-family:inherit}
+    .btn-mint{background:var(--mint);color:var(--mint-ink)}
+    .btn-mint:hover{background:#52d48b;transform:translateY(-1px);box-shadow:0 8px 24px rgba(60,201,123,.35)}
+    .btn-green{background:var(--green);color:#fff}
+    .btn-green:hover{background:var(--forest-2)}
+    .btn-outline-light{border-color:rgba(255,255,255,.45);color:#fff}
+    .btn-outline-light:hover{background:rgba(255,255,255,.08);border-color:#fff}
+    .btn-outline{border-color:var(--green);color:var(--green)}
+    .btn-outline:hover{background:var(--sage)}
+    .btn-sm{min-height:42px;padding:0 20px;font-size:15px}
+
+    /* Nav */
+    .nav{position:sticky;top:0;z-index:50;background:var(--forest);color:#fff}
+    .nav-inner{display:flex;align-items:center;gap:22px;min-height:76px}
+    .logo-chip{display:inline-flex;align-items:center;background:#fff;border-radius:12px;padding:6px 12px;flex-shrink:0}
+    .logo-chip img{display:block;height:44px;width:auto}
+    .nav-links{display:flex;gap:26px;margin-left:auto;align-items:center}
+    .nav-links a{text-decoration:none;font-weight:600;font-size:15.5px;color:rgba(255,255,255,.85)}
+    .nav-links a:hover{color:#fff}
+    .nav-cta{margin-left:6px}
+    .menu-btn{display:none;margin-left:auto;background:none;border:0;color:#fff;cursor:pointer;padding:10px;border-radius:8px}
+    .menu-btn svg{display:block}
+    .mobile-menu{display:none}
+    @media (max-width:980px){
+      .nav-links{display:none}
+      .menu-btn{display:block}
+      .mobile-menu{background:var(--forest);border-top:1px solid rgba(255,255,255,.1);padding:10px 20px 22px}
+      .mobile-menu.open{display:block}
+      .mobile-menu a{display:block;padding:14px 4px;color:#fff;text-decoration:none;font-weight:600;font-size:18px;border-bottom:1px solid rgba(255,255,255,.08)}
+      .mobile-menu .btn{margin-top:16px;width:100%}
+      .logo-chip img{height:38px}
+    }
+
+    /* Hero */
+    .hero{background:var(--forest);color:#fff;padding:64px 0 0;overflow:hidden}
+    .hero-inner{text-align:center;max-width:860px;margin:0 auto}
+    .hero h1{font-size:clamp(36px,6vw,64px);line-height:1.05;letter-spacing:-.02em;font-weight:800;margin:0 0 18px}
+    .hero h1 em{font-style:normal;color:var(--mint)}
+    .hero p.lead{font-size:clamp(17px,2vw,20px);color:rgba(255,255,255,.82);max-width:700px;margin:0 auto 30px}
+    .hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .hero-note{margin-top:14px;font-size:14px;color:rgba(255,255,255,.6)}
+    .hero-stage{position:relative;margin-top:48px;height:430px}
+    .hero-stage::before{content:"";position:absolute;left:50%;bottom:-40px;width:min(980px,120%);height:300px;transform:translateX(-50%);background:var(--green);border-radius:var(--r-lg) var(--r-lg) 0 0;opacity:.55}
+
+    /* Phone mockup (live HTML, illustrative values) */
+    .phone{position:relative;z-index:1;width:320px;margin:0 auto;background:#fff;color:var(--ink);border-radius:34px 34px 0 0;padding:18px 16px 0;box-shadow:0 30px 80px rgba(0,0,0,.4);border:8px solid #0e1712;border-bottom:0;height:430px;overflow:hidden;text-align:left}
+    .ph-top{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:15px;margin-bottom:12px}
+    .ph-top span{color:var(--muted);font-weight:600}
+    .ph-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0 0 10px;display:flex;justify-content:space-between}
+    .ph-rings{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;margin-bottom:14px}
+    .ph-rings svg{width:78px;height:78px;display:block;margin:0 auto 4px}
+    .ph-rings b{display:block;font-size:12px}
+    .ph-rings small{font-size:11px;color:var(--muted)}
+    .ph-bar{display:grid;grid-template-columns:78px 1fr 44px;gap:8px;align-items:center;font-size:12px;margin:8px 0}
+    .ph-bar i{display:block;height:8px;border-radius:5px;background:#e8eeea;position:relative;overflow:hidden}
+    .ph-bar i::after{content:"";position:absolute;inset:0;width:var(--w);background:var(--c);border-radius:5px}
+    .ph-bar span:last-child{text-align:right;font-weight:600}
+    .ph-meal{border-top:1px solid var(--line);padding:10px 0;display:flex;justify-content:space-between;font-size:13px}
+    .ph-meal b{font-weight:600}
+    .ph-meal span{color:var(--muted)}
+    .mock-tag{position:absolute;z-index:2;left:50%;bottom:12px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.75)}
+
+    /* Sections */
+    section{padding:88px 0}
+    .sec-head{text-align:center;max-width:760px;margin:0 auto 48px}
+    .sec-head h2{font-size:clamp(28px,4vw,44px);line-height:1.12;letter-spacing:-.015em;font-weight:800;margin:0 0 14px}
+    .sec-head p{font-size:18px;color:var(--ink-2);margin:0}
+    .kicker{display:inline-block;font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+    .tint{background:var(--bg)}
+    .sage{background:var(--sage)}
+
+    .why{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+    .why-card{text-align:left}
+    .ico{width:56px;height:56px;border-radius:16px;background:var(--sage);color:var(--green);display:grid;place-items:center;margin-bottom:16px}
+    .why-card h3{font-size:20px;margin:0 0 8px;font-weight:700}
+    .why-card p{margin:0;color:var(--ink-2)}
+
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+    .split h2{font-size:clamp(28px,4vw,42px);line-height:1.12;font-weight:800;letter-spacing:-.015em;margin:0 0 16px}
+    .split p{font-size:18px;color:var(--ink-2)}
+    .panel-stage{background:var(--green);border-radius:var(--r-lg);padding:34px;display:grid;place-items:center}
+    .card{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);padding:22px;width:100%;max-width:400px}
+    .card h4{margin:0 0 4px;font-size:18px}
+    .card .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+    .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+    .stat-grid div{background:var(--bg);border-radius:12px;padding:12px 6px}
+    .stat-grid b{display:block;font-size:22px}
+    .stat-grid small{color:var(--muted);font-size:12px}
+    .chips{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0}
+    .chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-weight:600;font-size:14.5px}
+    .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+    .chip.soon .dot{background:#b9c4bd}
+    .note{font-size:14px;color:var(--muted)}
+
+    .ways{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+    .way{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:26px 22px;text-align:center}
+    .way .ico{margin:0 auto 14px}
+    .way h3{margin:0 0 6px;font-size:19px}
+    .way p{margin:0;color:var(--ink-2);font-size:15.5px}
+
+    .reviews{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .review{background:#fff;border-radius:var(--r);padding:26px;border:1px solid var(--line)}
+    .stars{color:var(--green);letter-spacing:2px;margin-bottom:10px}
+    .review p{margin:0 0 14px;font-size:16.5px}
+    .review small{color:var(--muted);font-weight:600}
+
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+    .step{padding:4px}
+    .step .num{font-size:14px;font-weight:800;color:var(--green);letter-spacing:.1em}
+    .step h3{font-size:22px;margin:8px 0}
+    .step p{margin:0;color:var(--ink-2)}
+
+    .help{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:860px;margin:0 auto}
+    .help a{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;text-decoration:none;font-weight:700;font-size:17px;transition:border-color .15s,transform .15s}
+    .help a:hover{border-color:var(--green);transform:translateY(-1px)}
+    .help a span{color:var(--green)}
+
+    .pro{background:var(--forest);color:#fff}
+    .pro .sec-head p{color:rgba(255,255,255,.78)}
+    .pro .kicker{color:var(--mint)}
+    .breyer{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;max-width:820px;margin:0 auto 44px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:var(--r-lg);padding:22px}
+    .breyer img{width:96px;height:96px;border-radius:50%;object-fit:cover;background:#1c4a31}
+    .breyer h3{margin:0 0 4px;font-size:21px}
+    .breyer p{margin:0;color:rgba(255,255,255,.78)}
+    .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .plan{background:#fff;color:var(--ink);border-radius:var(--r);padding:24px;display:flex;flex-direction:column}
+    .plan.best{outline:3px solid var(--mint)}
+    .plan .tag{align-self:flex-start;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--sage);color:var(--green);border-radius:999px;padding:4px 10px;margin-bottom:12px}
+    .plan.best .tag{background:var(--mint);color:var(--mint-ink)}
+    .plan h3{margin:0 0 6px;font-size:19px}
+    .plan .price{font-size:28px;font-weight:800;margin:4px 0 12px}
+    .plan .price small{font-size:14px;color:var(--muted);font-weight:600}
+    .plan ul{margin:0 0 20px;padding-left:18px;color:var(--ink-2);font-size:15px}
+    .plan li{margin:5px 0}
+    .plan .btn{margin-top:auto}
+    .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:40px}
+    .flow div{border-top:2px solid rgba(255,255,255,.2);padding-top:14px}
+    .flow b{display:block;color:var(--mint);font-size:14px;letter-spacing:.08em}
+    .flow span{color:rgba(255,255,255,.85)}
+
+    .faq{max-width:820px;margin:0 auto}
+    .faq details{border-bottom:1px solid var(--line);padding:18px 0}
+    .faq summary{cursor:pointer;font-weight:700;font-size:18px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+    .faq summary::-webkit-details-marker{display:none}
+    .faq summary::after{content:"+";color:var(--green);font-size:24px;line-height:1}
+    .faq details[open] summary::after{content:"–"}
+    .faq p{color:var(--ink-2);margin:10px 0 0}
+
+    .final{background:var(--green);color:#fff;text-align:center}
+    .final h2{font-size:clamp(28px,4vw,44px);font-weight:800;margin:0 0 22px;line-height:1.15}
+    .final p{color:rgba(255,255,255,.85);margin:14px 0 0}
+
+    footer{background:var(--forest);color:rgba(255,255,255,.75);padding:56px 0 30px;font-size:15px}
+    .foot{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:28px}
+    footer h4{color:#fff;font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 14px}
+    footer a{display:block;text-decoration:none;margin:8px 0;color:rgba(255,255,255,.8)}
+    footer a:hover{color:#fff}
+    .fine{border-top:1px solid rgba(255,255,255,.12);margin-top:36px;padding-top:22px;font-size:13px;color:rgba(255,255,255,.6)}
+
+    @media (max-width:980px){
+      .why,.ways{grid-template-columns:repeat(2,1fr)}
+      .plans{grid-template-columns:repeat(2,1fr)}
+      .split{grid-template-columns:1fr;gap:32px}
+      .foot{grid-template-columns:1fr 1fr}
+      .flow{grid-template-columns:repeat(2,1fr)}
+    }
+    @media (max-width:640px){
+      section{padding:60px 0}
+      .hero{padding-top:44px}
+      .hero-actions .btn{width:100%}
+      .hero-stage{height:390px;margin-top:38px}
+      .phone{width:290px;height:390px}
+      .why,.ways,.reviews,.steps,.help,.plans,.flow{grid-template-columns:1fr}
+      .breyer{grid-template-columns:1fr;text-align:center}
+      .breyer img{margin:0 auto}
+      .panel-stage{padding:18px}
+      .foot{grid-template-columns:1fr}
+      .sec-head{margin-bottom:34px}
+    }
+  </style>
 </head>
 <body>
-  <nav class="nav">
-    <div class="nav-inner">
-      <a class="brand" href="#top" aria-label="Bulamu360 home">
-        <span class="brand-logo-chip"><img class="brand-logo" src="/bulamu360-wordmark.png" alt="Bulamu360 — Eat better, live better" width="520" height="221"></span>
-      </a>
-      <div class="nav-links">
-        <a href="#how">How it works</a>
-        <a href="#packages">Packages</a>
-        <a href="#about">About</a>
+  <a class="sr" href="#main">Skip to content</a>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="logo-chip" href="/" aria-label="Bulamu360 home"><img src="/bulamu360-wordmark.png" alt="Bulamu360" width="520" height="221"></a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="#why">Tracker</a>
+        <a href="#log">How to log</a>
+        <a href="#plans">Personal plans</a>
         <a href="#faq">FAQ</a>
-        <a href="/app#tracker" class="nav-tracker">Tracker</a>
-      </div>
-      <a class="btn btn-primary" href="/app">Start Assessment</a>
+        <a href="/app">Free assessment</a>
+        <a class="btn btn-mint btn-sm nav-cta" href="/tracker">Start Tracking Free</a>
+      </nav>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      </button>
     </div>
-  </nav>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile">
+      <a href="#why">Tracker</a>
+      <a href="#log">How to log</a>
+      <a href="#plans">Personal plans</a>
+      <a href="#faq">FAQ</a>
+      <a href="/app">Free assessment</a>
+      <a class="btn btn-mint" href="/tracker">Start Tracking Free</a>
+    </nav>
+  </header>
 
-  <main id="top">
-    <section class="hero">
-      <div class="hero-inner">
-        <div class="hero-copy">
-          <div class="eyebrow">Dietitian-informed nutrition support</div>
-          <h1>Bulamu360</h1>
-          <p>Your personal nutrition coach, anytime. Get a personalised food plan built around your body, health goals, lifestyle, budget, and local food realities.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="/app">Start Your Nutrition Assessment</a>
-            <a class="btn btn-light" href="#packages">View Packages</a>
-            <a class="btn btn-light" href="/app#tracker">Open the Free Tracker</a>
-          </div>
-          <div class="trust-row">
-            <span>Weight loss</span>
-            <span>Diabetes support</span>
-            <span>Pregnancy nutrition</span>
-            <span>Family meals</span>
-            <span>Gut-sensitive plans</span>
-          </div>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <h1 id="hero-title">Nutrition tracking built for <em>the food you really eat.</em></h1>
+        <p class="lead">From macros to micronutrients, Bulamu360 shows what your meals give your body, with matooke, beans, dodo and posho built in, plus verified global foods. Add weight, blood sugar, blood pressure, sleep and fasting to see the whole picture.</p>
+        <div class="hero-actions">
+          <a class="btn btn-mint" href="/tracker">Start Tracking Free</a>
+          <a class="btn btn-outline-light" href="#plans">Get a personal plan</a>
         </div>
+        <p class="hero-note">No sign-up needed. Your data stays on your device unless you choose to share it.</p>
+      </div>
+      <div class="hero-stage">
+        <div class="phone" role="img" aria-label="Example of the Bulamu360 tracker showing energy consumed, burned and remaining, macro targets and logged meals">
+          <div class="ph-top"><span>‹</span>Today<span>›</span></div>
+          <div class="ph-label"><span>Energy summary</span><span>Targets</span></div>
+          <div class="ph-rings">
+            <div><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32" fill="none" stroke="#e8eeea" stroke-width="9"/><circle cx="40" cy="40" r="32" fill="none" stroke="#1f8a4c" stroke-width="9" stroke-dasharray="50 201" transform="rotate(-90 40 40)"/><circle cx="40" cy="40" r="32" fill="none" stroke="#2f6f9f" stroke-width="9" stroke-dasharray="62 201" stroke-dashoffset="-50" transform="rotate(-90 40 40)"/><circle cx="40" cy="40" r="32" fill="none" stroke="#d9892b" stroke-width="9" stroke-dasharray="40 201" stroke-dashoffset="-112" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#16211b">1,640</text></svg><b>Consumed</b><small>kcal</small></div>
+            <div><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32" fill="none" stroke="#e8eeea" stroke-width="9"/><circle cx="40" cy="40" r="32" fill="none" stroke="#123a26" stroke-width="9" stroke-dasharray="201 201" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#16211b">2,110</text></svg><b>Burned</b><small>kcal</small></div>
+            <div><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32" fill="none" stroke="#e8eeea" stroke-width="9"/><circle cx="40" cy="40" r="32" fill="none" stroke="#3cc97b" stroke-width="9" stroke-dasharray="45 201" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#16211b">357</text></svg><b>Remaining</b><small>kcal</small></div>
+          </div>
+          <div class="ph-bar"><span>Protein</span><i style="--w:82%;--c:#1f8a4c"></i><span>82%</span></div>
+          <div class="ph-bar"><span>Net carbs</span><i style="--w:74%;--c:#2f6f9f"></i><span>74%</span></div>
+          <div class="ph-bar"><span>Fat</span><i style="--w:68%;--c:#d9892b"></i><span>68%</span></div>
+          <div class="ph-bar"><span>Iron</span><i style="--w:71%;--c:#1f8a4c"></i><span>71%</span></div>
+          <div class="ph-bar"><span>Calcium</span><i style="--w:58%;--c:#1f8a4c"></i><span>58%</span></div>
+          <div class="ph-meal"><b>Breakfast</b><span>Millet porridge, eggs · 420 kcal</span></div>
+          <div class="ph-meal"><b>Lunch</b><span>Matooke, beans, dodo · 690 kcal</span></div>
+        </div>
+        <div class="mock-tag">Example screen · illustrative values</div>
       </div>
     </section>
 
-    <section class="band">
+    <section id="why" aria-labelledby="why-title">
       <div class="wrap">
-        <div class="section-head center">
-          <p class="kicker">What Bulamu360 Does</p>
-          <h2>Nutrition guidance that feels practical, personal, and clinically careful.</h2>
-          <p>Bulamu360 connects everyday food choices with health goals, meal planning, follow-up, and expert review.</p>
+        <div class="sec-head">
+          <span class="kicker">Why use Bulamu360?</span>
+          <h2 id="why-title">Know exactly what your food is doing for you.</h2>
+          <p>Reference nutrition data from USDA FoodData Central and East African food tables, and targets set for your body.</p>
         </div>
-        <div class="grid-3">
-          <div class="card"><div class="icon">01</div><h3>Personal Assessment</h3><p>Customers enter their goals, body measurements, health conditions, symptoms, budget, and lifestyle details.</p></div>
-          <div class="card"><div class="icon">02</div><h3>Private Plan Generation</h3><p>The plan engine prepares a customer-specific nutrition plan securely through the backend after order submission.</p></div>
-          <div class="card"><div class="icon">03</div><h3>Approval and Follow-Up</h3><p>Breyer reviews payment and plan safety, then the customer receives an approved plan link or unlock code.</p></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="how">
-      <div class="wrap">
-        <div class="section-head">
-          <p class="kicker">How It Works</p>
-          <h2>A simple flow from assessment to approved plan.</h2>
-        </div>
-        <div class="grid-2 how">
-          <div class="card step"><h3>Take the assessment</h3><p>Answer questions about your health goals, diet history, body measurements, symptoms, activity, and food preferences.</p></div>
-          <div class="card step"><h3>Choose your package</h3><p>Select the plan level that fits your needs. The Complete Personal Plan is the most popular option.</p></div>
-          <div class="card step"><h3>Submit payment reference</h3><p>Pay using mobile money and submit the transaction reference for admin review.</p></div>
-          <div class="card step"><h3>Unlock your plan</h3><p>After approval, use your secure code or download link to access your personal nutrition plan.</p></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="packages" class="band">
-      <div class="wrap">
-        <div class="section-head center">
-          <p class="kicker">Packages</p>
-          <h2>Choose the support level that matches your goal.</h2>
-          <p>Packages are designed for practical nutrition support, not emergency care or medical diagnosis.</p>
-        </div>
-        <div class="packages">
-          <div class="package">
-            <span class="pill">Starter</span>
-            <h3>Basic Nutrition Guide</h3>
-            <div class="price">UGX 40,000</div>
-            <ul>
-              <li>Personal nutrition snapshot</li>
-              <li>Simple meal direction</li>
-              <li>Basic portion guidance</li>
-              <li>Useful for general wellness</li>
-            </ul>
+        <div class="why">
+          <div class="why-card">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V11M9 20V5M14 20v-7M19 20V8"/></svg></div>
+            <h3>Dial in your diet</h3>
+            <p>See which vitamins, minerals, fats and amino acids you get the most and least of. More than 70 nutrients tracked.</p>
           </div>
-          <div class="package featured">
-            <span class="pill">Most Popular</span>
-            <h3>Complete Personal Plan</h3>
-            <div class="price">UGX 70,000</div>
-            <ul>
-              <li>Personalised meal structure</li>
-              <li>Recipe and portion guidance</li>
-              <li>Clinical safety notes where relevant</li>
-              <li>Downloadable approved plan</li>
-              <li>Progress follow-up support</li>
-            </ul>
+          <div class="why-card">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg></div>
+            <h3>Reach your goal weight</h3>
+            <p>Personal calorie and macro targets from your age, height, weight and activity, with every calculation shown.</p>
           </div>
-          <div class="package">
-            <span class="pill">Specialist</span>
-            <h3>Advanced Condition Plan</h3>
-            <div class="price">UGX 120,000+ <small>depending on package</small></div>
-            <ul>
-              <li>Condition-aware nutrition planning</li>
-              <li>More detailed review gates</li>
-              <li>Support for complex goals</li>
-              <li>Best for diabetes, pregnancy, gut, family, or specialist needs</li>
-            </ul>
+          <div class="why-card">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div>
+            <h3>See your whole health</h3>
+            <p>Log weight, blood sugar, blood pressure, sleep, mood and your own custom measures, then compare them with what you eat.</p>
+          </div>
+          <div class="why-card">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+            <h3>Private by design</h3>
+            <p>Your diary stays on your phone. Share progress with your dietitian only when you choose to.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="about">
+    <section class="tint" aria-labelledby="health-title">
       <div class="wrap split">
+        <div class="panel-stage">
+          <div class="card" role="img" aria-label="Example fasting and weight summary card">
+            <h4>Fasting &amp; weight</h4>
+            <p class="sub">Your last 30 days</p>
+            <div class="stat-grid">
+              <div><b>16:8</b><small>Schedule</small></div>
+              <div><b>86%</b><small>Fasts completed</small></div>
+              <div><b>−1.8</b><small>kg change</small></div>
+            </div>
+            <p class="note" style="margin:12px 0 0">Example card, illustrative values</p>
+          </div>
+        </div>
         <div>
-          <div class="section-head">
-            <p class="kicker">About Bulamu360</p>
-            <h2>Built for real people, real kitchens, and real follow-through.</h2>
-            <p>Bulamu360 is designed to make nutrition guidance more practical: food that can be bought, cooked, enjoyed, and adjusted as life changes.</p>
+          <span class="kicker">Biometrics, fasting &amp; devices</span>
+          <h2 id="health-title">All your health numbers in one place.</h2>
+          <p>Track blood glucose around meals, blood pressure, ketones, cholesterol, sleep, cycle phases and anything else you want to measure. Import readings from other apps and devices as a CSV file today. Direct device sync is on the way.</p>
+          <div class="chips" aria-label="Device integrations">
+            <span class="chip"><span class="dot"></span>CSV import: available</span>
+            <span class="chip soon"><span class="dot"></span>Apple Health: planned</span>
+            <span class="chip soon"><span class="dot"></span>Google Health Connect: planned</span>
+            <span class="chip soon"><span class="dot"></span>Fitbit · Garmin · Oura: planned</span>
+            <span class="chip soon"><span class="dot"></span>Glucose monitors: planned</span>
           </div>
-          <div class="grid-2">
-            <div class="card"><h3>Local and global food sense</h3><p>Plans can include familiar Ugandan meals, salads, soups, smoothies, and practical global recipes where clinically safe.</p></div>
-            <div class="card"><h3>Safety-first guidance</h3><p>Specialist conditions are handled with caution, review notes, and referral reminders where medical care is needed.</p></div>
-          </div>
-        </div>
-        <div class="photo" role="img" aria-label="Fresh balanced meal ingredients"></div>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="quote">
-          <p>“The best nutrition plan is not just scientifically correct. It must be practical enough to survive a real week.”</p>
-          <small>Bulamu360 philosophy</small>
+          <a class="btn btn-green" href="/app#tracker/bio">Open biometrics</a>
         </div>
       </div>
     </section>
 
-    <section id="faq" class="band">
+    <section id="log" aria-labelledby="log-title">
       <div class="wrap">
-        <div class="section-head">
-          <p class="kicker">FAQ</p>
-          <h2>Common questions before starting.</h2>
+        <div class="sec-head">
+          <span class="kicker">Four easy ways to log</span>
+          <h2 id="log-title">Log a meal in seconds.</h2>
+          <p>However you like to record food, it lands in one diary with full nutrient detail.</p>
         </div>
+        <div class="ways">
+          <div class="way">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></div>
+            <h3>Search</h3><p>Local Ugandan foods, your own recipes, and hundreds of thousands of verified foods online.</p>
+          </div>
+          <div class="way">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12"/></svg></div>
+            <h3>Scan it</h3><p>Scan or type the barcode of a packaged product for its label nutrition. Free.</p>
+          </div>
+          <div class="way">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+            <h3>Say it</h3><p>“Two eggs, a slice of bread and half an avocado.” Speak or type it and review before saving.</p>
+          </div>
+          <div class="way">
+            <div class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/></svg></div>
+            <h3>Snap it</h3><p>Attach a photo of your plate and tag what’s on it, with portion guides to help.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sage" aria-labelledby="reviews-title">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="kicker">Client stories</span>
+          <h2 id="reviews-title">Designed around real kitchens and real weeks.</h2>
+        </div>
+        <div class="reviews">
+          <figure class="review" style="margin:0"><div class="stars" aria-label="5 out of 5">★★★★★</div><p>“The plan felt practical because it used foods I already cook at home and gave clearer portions than generic diet advice.”</p><small>Client · Clinical nutrition plan</small></figure>
+          <figure class="review" style="margin:0"><div class="stars" aria-label="5 out of 5">★★★★★</div><p>“The family guidance made shopping and cooking easier because the meals were built around our budget and shared household foods.”</p><small>Client · Family nutrition plan</small></figure>
+          <figure class="review" style="margin:0"><div class="stars" aria-label="5 out of 5">★★★★★</div><p>“The strongest part was the structure: meals, portions, substitutions, and follow-up notes in one place.”</p><small>Client · Personal nutrition plan</small></figure>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="repeat-title">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="kicker">Eat. Track. Improve.</span>
+          <h2 id="repeat-title">Small daily habits, clear long-term progress.</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><span class="num">01</span><h3>Log food &amp; exercise</h3><p>Add meals by search, barcode, voice or photo. Log exercise and water in a tap.</p></div>
+          <div class="step"><span class="num">02</span><h3>See your nutrition snapshot</h3><p>Energy rings, macro targets and every micronutrient, with the foods behind each number.</p></div>
+          <div class="step"><span class="num">03</span><h3>Build habits that last</h3><p>Trends, gap analysis and food suggestions show what to change next, one step at a time.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tint" aria-labelledby="help-title">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="kicker">How can we help?</span>
+          <h2 id="help-title">I want to…</h2>
+        </div>
+        <div class="help">
+          <a href="/app#tracker/diary">Keep track of what I eat <span aria-hidden="true">→</span></a>
+          <a href="/app#tracker/bio">Monitor my health numbers <span aria-hidden="true">→</span></a>
+          <a href="/app#tracker/targets">Set my calorie &amp; nutrient targets <span aria-hidden="true">→</span></a>
+          <a href="/app#tracker/analysis">Find gaps in my diet <span aria-hidden="true">→</span></a>
+          <a href="/app#tracker/fasting">Try intermittent fasting <span aria-hidden="true">→</span></a>
+          <a href="/app">Get a personal plan from a dietitian <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section id="plans" class="pro" aria-labelledby="plans-title">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="kicker">Personal nutrition plans</span>
+          <h2 id="plans-title">Want a plan made for you?</h2>
+          <p>Take the free assessment, then get a personalised plan from registered dietitian Breyer Naula. Your plan works alongside the tracker, and Breyer can follow your progress when you choose to share it.</p>
+        </div>
+        <div class="breyer">
+          <img src="/breyer-naula-portrait.png" alt="Breyer Naula, registered dietitian" width="96" height="96" loading="lazy">
+          <div><h3>Breyer Naula, RDN</h3><p>Registered dietitian and nutritionist in Uganda. Plans are built around your body, your conditions and the foods you can buy and cook.</p></div>
+        </div>
+        <div class="plans">
+          <div class="plan">
+            <span class="tag">Starter</span>
+            <h3>Starter Plan</h3>
+            <div class="price">UGX 40K</div>
+            <ul><li>BMI and calorie range</li><li>Simple macro targets</li><li>Local Ugandan meal ideas</li><li>Downloadable PDF</li></ul>
+            <a class="btn btn-outline btn-sm" href="/app#bmi-tool">Start assessment</a>
+          </div>
+          <div class="plan best">
+            <span class="tag">Most popular</span>
+            <h3>Complete Personal Plan</h3>
+            <div class="price">UGX 70K</div>
+            <ul><li>30-day structured meal plan</li><li>Protein, carb, fat, fibre and water targets</li><li>Shopping list and budget swaps</li><li>Follow-up from Breyer</li></ul>
+            <a class="btn btn-green btn-sm" href="/app#bmi-tool">Start assessment</a>
+          </div>
+          <div class="plan">
+            <span class="tag">Specialist</span>
+            <h3>Specialist Clinical Plan</h3>
+            <div class="price">UGX 120K<small>+</small></div>
+            <ul><li>Diabetes, hypertension, PCOS, kidney, pregnancy and more</li><li>Medication and lab awareness</li><li>30–60 day structure</li></ul>
+            <a class="btn btn-outline btn-sm" href="/app#bmi-tool">Start assessment</a>
+          </div>
+          <div class="plan">
+            <span class="tag">Family</span>
+            <h3>Family Nutrition Plan</h3>
+            <div class="price">UGX 200K<small>+</small></div>
+            <ul><li>Notes per family member</li><li>Shared weekly menu</li><li>Children and teen guidance</li><li>Household shopping guide</li></ul>
+            <a class="btn btn-outline btn-sm" href="/app#bmi-tool">Start assessment</a>
+          </div>
+        </div>
+        <div class="flow" aria-label="How a personal plan works">
+          <div><b>01</b><span>Take the free assessment</span></div>
+          <div><b>02</b><span>Choose your package</span></div>
+          <div><b>03</b><span>Pay by mobile money and submit the reference</span></div>
+          <div><b>04</b><span>Unlock your approved plan with your code</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="sec-head"><span class="kicker">FAQ</span><h2 id="faq-title">Common questions</h2></div>
         <div class="faq">
-          <details open><summary>Is Bulamu360 a medical diagnosis service?</summary><p>No. Bulamu360 provides nutrition guidance and planning support. It does not replace emergency care, diagnosis, medication, or your clinician's advice.</p></details>
-          <details><summary>How do customers receive their plan?</summary><p>After payment reference review and approval, the customer receives an approval code or secure plan link.</p></details>
-          <details><summary>Can Bulamu360 help with diabetes, pregnancy, kidney concerns, or gut issues?</summary><p>It can provide cautious nutrition support, but specialist conditions may require labs, clinician input, and dietitian review before intensifying targets.</p></details>
-          <details><summary>Can I use local foods?</summary><p>Yes. Bulamu360 is designed to work with practical local foods as well as selected global recipes where they make nutritional and culinary sense.</p></details>
+          <details open><summary>Is the tracker really free?</summary><p>Yes. The tracker is free and needs no account. Personal plans from Breyer are the paid service.</p></details>
+          <details><summary>Where is my tracker data stored?</summary><p>On your own device, in your browser. It is only shared with your dietitian if you connect with your approval code and press “Share now”. You can export or delete it at any time.</p></details>
+          <details><summary>Does it include Ugandan foods?</summary><p>Yes. Matooke, beans, posho, millet, sorghum, dodo, nakati, mukene, groundnuts and more are built in. You can also search verified USDA foods and packaged products, or create your own foods and recipes.</p></details>
+          <details><summary>Is Bulamu360 a medical diagnosis service?</summary><p>No. Bulamu360 provides nutrition guidance and tracking. It does not replace emergency care, diagnosis, medication, or your clinician's advice.</p></details>
+          <details><summary>How do I receive my personal plan?</summary><p>After your payment reference is reviewed and approved, you receive an approval code or a secure plan link.</p></details>
+          <details><summary>Can Bulamu360 help with diabetes, pregnancy, kidney concerns, or gut issues?</summary><p>It can provide cautious nutrition support, but specialist conditions may require labs, clinician input, and dietitian review before targets are intensified.</p></details>
         </div>
       </div>
     </section>
 
-    <section class="cta">
+    <section class="final" aria-labelledby="final-title">
       <div class="wrap">
-        <div class="section-head">
-          <p class="kicker">Start Now</p>
-          <h2>Ready for your personal nutrition plan?</h2>
-          <p>Take the assessment, choose your package, submit your payment reference, and unlock your approved Bulamu360 plan.</p>
-        </div>
-        <a class="btn btn-clay" href="/app">Start Assessment</a>
+        <h2 id="final-title">Whether you count calories, macros or micronutrients, count on Bulamu360.</h2>
+        <a class="btn btn-mint" href="/tracker">Start Tracking Free</a>
+        <p>Works in your phone or computer browser. No download needed.</p>
       </div>
     </section>
   </main>
 
   <footer>
     <div class="wrap">
-      <div>
-        <strong>Bulamu360</strong><br>
-        Your personal nutrition coach, anytime.
+      <div class="foot">
+        <div>
+          <a class="logo-chip" href="/" aria-label="Bulamu360 home" style="margin:0 0 14px"><img src="/bulamu360-logo.png" alt="Bulamu360 — Eat better, live better" width="760" height="418" style="height:70px"></a>
+          <p style="margin:0">Your personal nutrition coach, anytime.</p>
+        </div>
+        <div>
+          <h4>The product</h4>
+          <a href="/tracker">Nutrition tracker</a>
+          <a href="/app#tracker/diary">Food diary</a>
+          <a href="/app#tracker/bio">Biometrics</a>
+          <a href="/app#tracker/fasting">Fasting</a>
+        </div>
+        <div>
+          <h4>Services</h4>
+          <a href="/app">Free assessment</a>
+          <a href="#plans">Personal plans</a>
+          <a href="/app#unlock-sec">Unlock my plan</a>
+          <a href="/app#tracker/care">Message my dietitian</a>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <a href="/app#about-breyer">About Breyer</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms and Disclaimer</a>
+        </div>
       </div>
-      <div class="fine">
-        Bulamu360 provides dietary and lifestyle guidance. It does not replace medical diagnosis, emergency treatment, medication management, or personalised care from your clinician.
-        <br><br>
-        <a href="/privacy" style="color:var(--earth5);font-weight:700">Privacy Policy</a>
-        <span style="color:rgba(255,255,255,.3)"> | </span>
-        <a href="/terms" style="color:var(--earth5);font-weight:700">Terms and Disclaimer</a>
-      </div>
+      <div class="fine">Bulamu360 provides dietary and lifestyle guidance. It does not replace medical diagnosis, emergency treatment, medication management, or personalised care from your clinician. © Bulamu360</div>
     </div>
   </footer>
+  <script>
+    (function(){
+      var btn = document.querySelector('.menu-btn'), menu = document.getElementById('mobile-menu');
+      if (!btn || !menu) return;
+      function set(open){ menu.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu'); }
+      btn.addEventListener('click', function(){ set(!menu.classList.contains('open')); });
+      menu.addEventListener('click', function(e){ if (e.target.closest('a')) set(false); });
+      document.addEventListener('keydown', function(e){ if (e.key === 'Escape') set(false); });
+    })();
+  </script>
 </body>
 </html>

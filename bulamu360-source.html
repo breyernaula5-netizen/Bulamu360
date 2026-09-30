@@ -2097,6 +2097,8 @@ html.b360-open,html.b360-open body{overflow:hidden!important}
 
 
 
+
+
 <!-- B360:LAUNCH:START -->
 <section id="b360-launch" aria-labelledby="b360-launch-title">
   <div class="wrap b360l-grid">
@@ -8853,6 +8855,8 @@ function buildNutritionMemory(){
 
 
 
+
+
 <!-- B360:APP:START -->
 <div id="b360" class="b360" hidden></div>
 <script id="b360-script">
@@ -10919,7 +10923,13 @@ app.render = function(){
   // Fresh container per render so view-level listeners never accumulate.
   var old = U.qs('#b360-main', r), main = old.cloneNode(false);
   old.parentNode.replaceChild(main, old);
-  try { app.views[app.view](main); }
+  try {
+    app.views[app.view](main);
+    if (B.demo) {
+      var note = B.demo.banner() || (['today','diary'].indexOf(app.view) > -1 ? B.demo.offer() : '');
+      if (note) { var head = U.qs('.b-view-head', main); var box = U.h('div', null, note); if (head && head.nextSibling) main.insertBefore(box, head.nextSibling); else main.insertBefore(box, main.firstChild); }
+    }
+  }
   catch (err) {
     console.error('[B360] view error', err);
     main.innerHTML = '<div class="b-callout b-callout-warn"><b>This section could not be displayed.</b> Your data is safe. ' + U.esc(err.message) + '</div>';
@@ -12478,6 +12488,79 @@ if (!window.B360 || window.B360.booted) return;
 window.B360.booted = true;
 function start(){ try { window.B360.boot(); } catch (e) { console.error('[B360] boot failed', e); } }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
+/* ---- 14-demo.js ---- */
+/* ---------------- Example data (clearly labelled; removable in one click) ----------------
+   Lets new users explore every feature before logging their own data. Every item created here
+   carries demo:true and is removed by B.demo.remove(). Nothing is sent anywhere. */
+(function(){
+'use strict';
+var B = window.B360, U = B.util;
+var Demo = B.demo = {};
+function D(){ return B.store.data; }
+Demo.active = function(){ return !!D().settings.demo; };
+var DAY_MEALS = [
+  [['breakfast','08:00',[['loc:millet',60],['loc:eggs',100],['loc:passion fruit',36]]], ['lunch','13:15',[['loc:matooke',300],['loc:beans',180],['loc:dodo',130]]], ['snacks','16:30',[['loc:groundnuts',30],['loc:banana',118]]], ['dinner','19:30',[['loc:sweet potato',200],['loc:tilapia',150],['loc:sukuma wiki',130]]]],
+  [['breakfast','07:45',[['loc:oats',50],['loc:milk',244],['loc:mango',165]]], ['lunch','13:00',[['loc:brown rice',195],['loc:beans',180],['loc:nakati',130]]], ['snacks','11:00',[['loc:yogurt',245]]], ['dinner','20:00',[['loc:posho',200],['loc:mukene',30],['loc:avocado',100]]]],
+  [['breakfast','08:10',[['loc:sweet potato',150],['loc:eggs',100]]], ['lunch','13:30',[['loc:matooke',250],['loc:groundnuts',40],['loc:dodo',130]]], ['snacks','17:00',[['loc:papaya',145]]], ['dinner','19:15',[['loc:cassava',140],['loc:beans',180],['loc:tomatoes',100]]]]
+];
+Demo.load = function(){
+  if (Demo.active()) return;
+  var d = D(), today = U.today(), p = d.profile;
+  if (!B.profile.complete()) { Object.assign(p, { sex:'female', age:34, heightCm:165, weightKg:78, activity:'moderate', goal:'lose', goalRateKg:0.5, goalWeightKg:72 }); d.settings.demoProfile = true; }
+  for (var i = 13; i >= 0; i--) {
+    var k = U.addDays(today, -i), plan = DAY_MEALS[i % DAY_MEALS.length];
+    if (i === 0) plan = plan.slice(0, 2); // today: breakfast + lunch only
+    if (i === 5 || i === 9) continue;     // a couple of unlogged days, as in real life
+    plan.forEach(function(m){
+      m[2].forEach(function(f, j){
+        if (!B.foods.get(f[0])) return;
+        var e = B.diary.add(k, { foodId:f[0], grams:f[1] + (i % 3) * 10 * (j % 2), unitLabel:(f[1] + (i % 3) * 10 * (j % 2)) + ' g', group:m[0], time:m[1], source:'manual' });
+        e.demo = true;
+      });
+    });
+    var w = B.diary.addWater(k, i === 0 ? 750 : 1500 + (i % 4) * 250); w.demo = true;
+    [['weight', 79.4 - (13 - i) * 0.11 + ((i * 7) % 5) * 0.08, null, '07:00'], ['sleep', 6.4 + ((i * 3) % 5) * 0.35, null, '07:05'], ['glucose', 5.1 + ((i * 5) % 6) * 0.15, null, '07:10', 'Fasting'], ['glucose', 6.6 + ((i * 7) % 5) * 0.3, null, '15:15', '2 h after meal'], ['bp', 124 - (13 - i) * 0.4 + (i % 3), 80 + (i % 2), '07:15'], ['hr', 68 + (i % 5), null, '07:15']]
+      .forEach(function(b){ try { var x = B.bio.add({ metric:b[0], value:U.round(b[1], 1), value2:b[2], date:k, time:b[3], tag:b[4] || '' }); x.demo = true; } catch (err) {} });
+    if (i % 2 === 0) { var ex = B.energy.addExercise({ activity:i % 4 === 0 ? 'walkBrisk' : 'strength', minutes:i % 4 === 0 ? 40 : 30, date:k, time:'18:00' }); ex.demo = true; }
+    if (i > 0 && i % 3 !== 1) {
+      var start = U.parseDay(U.addDays(k, -1)); start.setHours(20, 0, 0, 0);
+      var hours = 16 + (i % 3) * 0.75 - (i === 7 ? 3 : 0);
+      var rec = { id:U.uid('f'), start:start.getTime(), end:start.getTime() + hours * 36e5, targetHours:16, preset:'16:8', demo:true };
+      rec.hours = hours; rec.completed = hours >= 16; d.fasting.history.push(rec);
+    }
+  }
+  d.fasting.history.sort(function(a, b){ return b.end - a.end; });
+  if (!d.dashboard.widgets) d.dashboard.widgets = null;
+  d.settings.demo = true;
+  B.store.save(true);
+};
+Demo.remove = function(){
+  var d = D();
+  Object.keys(d.diary).forEach(function(k){ d.diary[k].entries = d.diary[k].entries.filter(function(e){ return !e.demo; }); if (!d.diary[k].entries.length && !d.diary[k].notes) delete d.diary[k]; });
+  d.biometrics.entries = d.biometrics.entries.filter(function(e){ return !e.demo; });
+  d.exercise = d.exercise.filter(function(x){ return !x.demo; });
+  d.fasting.history = d.fasting.history.filter(function(h){ return !h.demo; });
+  if (d.settings.demoProfile) { d.profile = B.store.defaults().profile; d.settings.demoProfile = false; }
+  d.settings.demo = false;
+  B.store.save(true);
+};
+Demo.banner = function(){
+  if (!Demo.active()) return '';
+  return '<div class="b-callout b-callout-warn b-demo-banner" role="status" style="margin-bottom:14px"><b>You are viewing example data.</b> It shows how the tracker works and is not anyone’s real health record. <button type="button" class="b-btn b-btn-sm" data-demo="remove">Remove example data</button></div>';
+};
+Demo.offer = function(){
+  if (Demo.active()) return '';
+  var any = Object.keys(D().diary).some(function(k){ return D().diary[k].entries.length; });
+  if (any) return '';
+  return '<div class="b-callout" style="margin-bottom:14px"><b>New here?</b> Explore every feature with a sample fortnight of meals, weight, glucose, blood pressure, sleep and fasting. You can remove it in one click. <button type="button" class="b-btn b-btn-sm b-btn-primary" data-demo="load">Explore with example data</button></div>';
+};
+document.addEventListener('click', function(e){
+  var a = e.target.closest && e.target.closest('[data-demo]'); if (!a || !document.getElementById('b360') || !document.getElementById('b360').contains(a)) return;
+  if (a.getAttribute('data-demo') === 'load') { Demo.load(); B.ui.toast('Example data loaded. Remove it any time.'); B.app.render(); }
+  else B.ui.confirm('Remove all example data? Anything you logged yourself is kept.', 'Remove').then(function(ok){ if (ok) { Demo.remove(); B.ui.toast('Example data removed.'); B.app.render(); } });
+});
 })();
 
 </script>
