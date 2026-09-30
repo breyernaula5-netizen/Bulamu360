@@ -21,7 +21,7 @@ function overlay(){
   o.setAttribute('role', 'status');
   o.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(18,40,28,.55);display:flex;align-items:center;justify-content:center;font-family:Outfit,Arial,sans-serif;backdrop-filter:blur(3px)';
   o.innerHTML = '<div style="background:#fff;border-radius:22px;padding:26px 30px;min-width:260px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.3)">' +
-    '<div style="width:46px;height:46px;border-radius:50%;border:4px solid #d9f0e1;border-top-color:#2e9e5b;margin:0 auto 14px;animation:b3pdfspin .9s linear infinite"></div>' +
+    '<div style="width:46px;height:46px;border-radius:50%;border:4px solid #d9f0e1;border-top-color:#17693f;margin:0 auto 14px;animation:b3pdfspin .9s linear infinite"></div>' +
     '<div style="font-weight:600;color:#123524;font-size:17px">Preparing your PDF</div><div data-msg style="color:#5f6f66;font-size:14px;margin-top:4px">Laying out pages…</div></div>' +
     '<style>@keyframes b3pdfspin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){[style*=b3pdfspin]{animation:none!important}}</style>';
   document.body.appendChild(o);
