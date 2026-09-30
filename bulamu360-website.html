@@ -117,21 +117,37 @@
       .photo{min-height:320px}
     }
   </style>
+<!-- B360:BRAND:START -->
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#0b4f2c">
+<!-- B360:BRAND:END -->
+<!-- B360:BRANDCSS:START -->
+<style id="b360-brand-style">
+.brand-logo-chip{display:inline-flex;align-items:center;background:#fff;border-radius:12px;padding:5px 12px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.brand-logo{display:block;height:42px;width:auto}
+.nav-tracker{font-weight:700}
+@media(max-width:600px){.brand-logo{height:34px}.brand-logo-chip{padding:4px 9px}}
+</style>
+<!-- B360:BRANDCSS:END -->
 </head>
 <body>
   <nav class="nav">
     <div class="nav-inner">
       <a class="brand" href="#top" aria-label="Bulamu360 home">
-        <div class="mark">360</div>
-        <div><span>Bulamu360</span><small>Personal nutrition coach</small></div>
+        <span class="brand-logo-chip"><img class="brand-logo" src="/bulamu360-wordmark.png" alt="Bulamu360 — Eat better, live better" width="520" height="221"></span>
       </a>
       <div class="nav-links">
         <a href="#how">How it works</a>
         <a href="#packages">Packages</a>
         <a href="#about">About</a>
         <a href="#faq">FAQ</a>
+        <a href="/app#tracker" class="nav-tracker">Tracker</a>
       </div>
-      <a class="btn btn-primary" href="https://bulamu360-backend.onrender.com/app">Start Assessment</a>
+      <a class="btn btn-primary" href="/app">Start Assessment</a>
     </div>
   </nav>
 
@@ -143,7 +159,7 @@
           <h1>Bulamu360</h1>
           <p>Your personal nutrition coach, anytime. Get a personalised food plan built around your body, health goals, lifestyle, budget, and local food realities.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="https://bulamu360-backend.onrender.com/app">Start Your Nutrition Assessment</a>
+            <a class="btn btn-primary" href="/app">Start Your Nutrition Assessment</a>
             <a class="btn btn-light" href="#packages">View Packages</a>
           </div>
           <div class="trust-row">
@@ -281,7 +297,7 @@
           <h2>Ready for your personal nutrition plan?</h2>
           <p>Take the assessment, choose your package, submit your payment reference, and unlock your approved Bulamu360 plan.</p>
         </div>
-        <a class="btn btn-clay" href="https://bulamu360-backend.onrender.com/app">Start Assessment</a>
+        <a class="btn btn-clay" href="/app">Start Assessment</a>
       </div>
     </section>
   </main>

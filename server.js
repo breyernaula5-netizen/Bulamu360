@@ -65,7 +65,13 @@ const mimeTypes = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
-  '.md': 'text/markdown; charset=utf-8'
+  '.md': 'text/markdown; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
@@ -2576,7 +2582,7 @@ function trackerClientOrders(db) {
   return db.orders.filter(o => ids.has(o.id));
 }
 function trackerAdminShell(title, body, active = 'clients') {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Bulamu360</title>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Bulamu360</title><link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <style>
 :root{--forest:#163d2a;--em:#1d7349;--sage:#edf3ee;--line:#dde1da;--ink:#1c2420;--muted:#5f6a64;--bg:#f5f6f3;--warn:#a8671a;--over:#a9492f}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,'Segoe UI',Roboto,Arial,sans-serif}

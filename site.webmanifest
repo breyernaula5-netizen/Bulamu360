@@ -1,0 +1,21 @@
+{
+  "name": "Bulamu360",
+  "short_name": "Bulamu360",
+  "description": "Personal nutrition coach and health tracker",
+  "start_url": "/app#tracker",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b4f2c",
+  "icons": [
+    {
+      "src": "/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

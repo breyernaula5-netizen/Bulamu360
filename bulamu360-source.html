@@ -586,6 +586,24 @@ footer{background:#0e180a;color:#fff;padding:62px 0 28px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- B360:BRAND:START -->
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#0b4f2c">
+<!-- B360:BRAND:END -->
+<!-- B360:BRANDCSS:START -->
+<style id="b360-brand-style">
+.nav-logo-chip{display:inline-flex;align-items:center;background:#fff;border-radius:12px;padding:5px 12px;box-shadow:0 2px 10px rgba(0,0,0,.18);transition:box-shadow .3s}
+#topnav.scrolled .nav-logo-chip{box-shadow:0 1px 4px rgba(20,32,26,.12)}
+.nav-logo{display:block;height:42px;width:auto}
+.foot-logo-chip{display:inline-flex;background:#fff;border-radius:12px;padding:8px 14px;margin-bottom:14px}
+.foot-logo{display:block;height:64px;width:auto}
+@media(max-width:600px){.nav-logo{height:34px}.nav-logo-chip{padding:4px 9px;border-radius:10px}.foot-logo{height:54px}}
+</style>
+<!-- B360:BRANDCSS:END -->
 <!-- B360:STYLE:START -->
 <style id="b360-style">
 /* =====================================================================
@@ -656,6 +674,12 @@ footer{background:#0e180a;color:#fff;padding:62px 0 28px}
 .b360 .b-brand-mark{width:30px;height:30px;border-radius:7px;background:var(--b-forest);display:grid;place-items:center;color:#fff;flex-shrink:0}
 .b360[data-theme="dark"] .b-brand-mark{background:#1d4a33}
 .b360 .b-brand-name{font-family:var(--b-serif);font-weight:700;font-size:16px;letter-spacing:-.01em}
+.b360 .b-brand{flex-direction:column;align-items:flex-start;gap:6px}
+.b360 .b-brand-logo{display:inline-flex;background:#fff;border-radius:8px;padding:6px 10px}
+.b360[data-theme="light"] .b-brand-logo{padding:0}
+.b360 .b-brand-logo img{display:block;height:58px;width:auto}
+.b360 .b-top-mark{display:none;width:26px;height:26px}
+@media (max-width:860px){.b360 .b-top-mark{display:block}}
 .b360 .b-brand-sub{font-size:11px;color:var(--b-text-3);letter-spacing:.04em}
 .b360 .b-nav{padding:10px 8px;display:flex;flex-direction:column;gap:1px}
 .b360 .b-nav-label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--b-text-3);padding:14px 10px 6px;font-weight:600}
@@ -1034,11 +1058,7 @@ html.b360-open,html.b360-open body{overflow:hidden!important}
 <nav id="topnav">
   <div class="wrap nav-row">
     <a href="#" class="nav-brand">
-      <div class="nav-leaf">🌿</div>
-      <div>
-        <span class="nav-name">Bulamu360</span>
-        <span class="nav-tagline">Your nutrition coach, anytime</span>
-      </div>
+      <span class="nav-logo-chip"><img class="nav-logo" src="/bulamu360-wordmark.png" alt="Bulamu360 — Eat better, live better" width="520" height="221"></span>
     </a>
     <div class="nav-links">
       <a href="#about-breyer">About Breyer</a>
@@ -2076,6 +2096,7 @@ html.b360-open,html.b360-open body{overflow:hidden!important}
 
 
 
+
 <!-- B360:LAUNCH:START -->
 <section id="b360-launch" aria-labelledby="b360-launch-title">
   <div class="wrap b360l-grid">
@@ -2644,7 +2665,7 @@ html.b360-open,html.b360-open body{overflow:hidden!important}
   <div class="wrap">
     <div class="foot-grid">
       <div>
-        <div class="foot-brand-row"><div class="foot-leaf">🌿</div><div><span class="foot-name">Bulamu360</span><span class="foot-by">by Breyer</span></div></div>
+        <div class="foot-logo-chip"><img class="foot-logo" src="/bulamu360-logo.png" alt="Bulamu360 — Eat better, live better" width="760" height="418" loading="lazy"></div>
         <p class="foot-desc">Personalised nutrition plans by Breyer Naula (RDN), Uganda's certified dietician. Real food. Clinical precision. Results you can feel.</p>
         <div class="foot-contact">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="452737203c20372b2430292470052228242c296b262a28">[email&#160;protected]</a></div>
         <div class="foot-contact">📞 +256 704 392545</div>
@@ -8831,6 +8852,7 @@ function buildNutritionMemory(){
 
 
 
+
 <!-- B360:APP:START -->
 <div id="b360" class="b360" hidden></div>
 <script id="b360-script">
@@ -10774,7 +10796,7 @@ function build(){
   r.innerHTML =
     '<a href="#b360-main" class="b-skip">Skip to content</a>' +
     '<aside class="b-side" aria-label="Tracker navigation">' +
-      '<div class="b-brand"><div class="b-brand-mark">' + B.icon('today', 16) + '</div><div><div class="b-brand-name">Bulamu360</div><div class="b-brand-sub">Nutrition &amp; health tracker</div></div></div>' +
+      '<div class="b-brand"><span class="b-brand-logo"><img src="/bulamu360-wordmark.png" alt="Bulamu360" width="520" height="221"></span><div class="b-brand-sub">Nutrition &amp; health tracker</div></div>' +
       '<nav class="b-nav">' + nav + '</nav>' +
       '<div class="b-side-foot"><div>Your data is stored on this device' + (B.store.available ? '' : ' <b>(storage blocked — changes will not persist)</b>') + '.</div>' +
       '<button type="button" class="b-btn b-btn-sm b-btn-block" data-act="close">' + B.icon('exit', 16) + 'Back to Bulamu360 site</button></div>' +
@@ -10782,6 +10804,7 @@ function build(){
     '<div class="b-main">' +
       '<header class="b-top">' +
         '<button type="button" class="b-btn b-btn-ghost b-btn-icon b-mobile-only" data-act="close" aria-label="Back to Bulamu360 site" style="display:none">' + B.icon('back') + '</button>' +
+        '<img class="b-top-mark" src="/favicon-48.png" alt="" width="48" height="48">' +
         '<h1 class="b-top-title" id="b360-title">Today</h1>' +
         '<div class="b-datenav" role="group" aria-label="Choose day">' +
           '<button type="button" data-act="prev" aria-label="Previous day">' + B.icon('back', 16) + '</button>' +
