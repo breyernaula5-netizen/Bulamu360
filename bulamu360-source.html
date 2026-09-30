@@ -2757,6 +2757,42 @@ html.b360-open,html.b360-open body{overflow:hidden!important}
 #b360-launch .b3l-btn.ghost{background:#fff;color:#154d31;border-color:#bfe3cf}
 #b360-launch .b3l-chart{border-color:#dcece3}
 
+/* ===== Packages: account plan card, locks, upsell, template buying ===== */
+.b360 .b-energy-top{margin-bottom:14px}
+.b360 .b-energy-top .b-panel-body{display:flex;justify-content:center}
+.b360 [data-view].b3-locked span:first-of-type::after{content:" \1F512";font-size:.8em;opacity:.7}
+.b360 .b3-upsell{border:0;background:linear-gradient(135deg,#0f3d26,#17693f);color:#fff;border-radius:20px;overflow:hidden}
+.b360 .b3-upsell .b-panel-body{padding:34px 30px;display:grid;gap:12px;justify-items:start}
+.b360 .b3-upsell h2{font:600 26px/1.2 'Outfit',sans-serif;color:#fff;margin:0}
+.b360 .b3-upsell p{color:rgba(255,255,255,.85);max-width:520px;margin:0}
+.b360 .b3-upsell-badge{font:600 11px/1 'Outfit',sans-serif;letter-spacing:.14em;text-transform:uppercase;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:999px}
+.b360 .b3-upsell .b-btn{background:#fff;color:#0f3d26;border-color:#fff}
+.b360 .b3-upsell .b-btn-primary{background:#f07a5a;border-color:#f07a5a;color:#fff}
+.b360 .b3-plan{border:0;border-radius:20px;overflow:hidden;margin-bottom:16px;background:linear-gradient(135deg,#eef9f3,#e6f3fb)}
+.b360 .b3-plan-personal{background:linear-gradient(135deg,#e7f6ee,#fdf3e8)}
+.b360 .b3-plan-specialist{background:linear-gradient(135deg,#e6f3fb,#efe8fa)}
+.b360 .b3-plan-advanced{background:linear-gradient(135deg,#0f3d26,#1f8a7a);color:#fff}
+.b360 .b3-plan-advanced .b3-plan-lbl,.b360 .b3-plan-advanced .b3-plan-sub,.b360 .b3-plan-advanced .b3-plan-list em{color:rgba(255,255,255,.75)}
+.b360 .b3-plan-advanced .b3-plan-name,.b360 .b3-plan-advanced .b3-plan-list li{color:#fff}
+.b360 .b3-plan .b-panel-body{padding:22px}
+.b360 .b3-plan-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.b360 .b3-plan-lbl{font:600 11px/1 'Outfit',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#5f7468}
+.b360 .b3-plan-name{font:600 30px/1.1 'Cormorant Garamond',Georgia,serif;color:#0f3d26;margin:4px 0}
+.b360 .b3-plan-sub{font-size:13px;color:#5f7468}
+.b360 .b3-plan-list{list-style:none;margin:16px 0 10px;padding:0;display:grid;gap:6px}
+.b360 .b3-plan-list li{display:flex;gap:10px;align-items:baseline;font-size:14px;color:#12241a}
+.b360 .b3-plan-list li.off{opacity:.6}
+.b360 .b3-plan-list li span{width:18px;flex:none}
+.b360 .b3-plan-list em{font-style:normal;font-size:11px;color:#5f7468;margin-left:auto;text-transform:uppercase;letter-spacing:.08em}
+.b360 .b3-link{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px}
+.b360 .b3-link label{display:grid;gap:6px;font-size:13px;flex:1;min-width:200px}
+.b360 .b3-link input{padding:10px 12px;border:1px solid var(--b-border-strong);border-radius:10px;font:inherit;background:var(--b-surface);color:var(--b-text)}
+.b360 .b3-tpl-list{display:grid;gap:8px}
+.b360 .b3-tpl{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--b-border)}
+.b360 .b3-tpl:last-child{border-bottom:0}
+.b360 .b3-tpl b{display:block;font-size:14px}.b360 .b3-tpl small{color:var(--b-text-3);font-size:12px}
+.b360 .b3-tpl-buy{background:#fdece6;color:#b8452c;border-color:#f6c9bb}
+
 </style>
 <!-- B360:STYLE:END -->
 <!-- B360:POLISH:START -->
@@ -2949,6 +2985,83 @@ body{background:#f7fcf9}
 @media (prefers-reduced-motion:reduce){.gw-hero,.gw-row,.gw-go{transition:none}.gw-hero:hover{transform:none}}
 </style>
 <!-- B360:GWSTYLE:END -->
+<!-- B360:EXTRAS:START -->
+<style id="b360-extras">
+/* ---- Nutrition toolbox: colour and photos ---- */
+#personalised-gateways.gw{background:radial-gradient(circle at 6% 10%,#d9f1e3 0,transparent 30%),radial-gradient(circle at 94% 16%,#fde3d8 0,transparent 28%),radial-gradient(circle at 72% 96%,#d9eaf8 0,transparent 34%),radial-gradient(circle at 20% 90%,#efe6fa 0,transparent 26%),#f8fcf9!important}
+.gw-eyebrow{background:linear-gradient(90deg,#17693f,#1f8a7a)!important;color:#fff!important}
+.gw-head h2{background:linear-gradient(90deg,#0f3d26,#17693f 55%,#1f8a7a);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.gw-hero{min-height:236px;align-content:end;isolation:isolate;background:#0f3d26!important}
+.gw-hero::after{display:none!important}
+.gw-hero-img{position:absolute;inset:0;background-size:cover;background-position:center;z-index:-2;transition:transform .7s cubic-bezier(.2,.8,.2,1)}
+.gw-hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(100deg,rgba(12,50,31,.95) 0%,rgba(15,61,38,.8) 48%,rgba(15,61,38,.22) 100%)}
+.gw-hero-b::before{background:linear-gradient(100deg,rgba(14,60,70,.95) 0%,rgba(23,105,90,.78) 48%,rgba(23,105,63,.2) 100%)}
+.gw-hero:hover .gw-hero-img{transform:scale(1.06)}
+.gw-hero-ico{background:rgba(255,255,255,.18)!important;backdrop-filter:blur(4px)}
+.gw-hero-cta{background:#fff!important;color:#0f3d26!important}
+.gw-hero-b .gw-hero-cta{background:#f07a5a!important;color:#fff!important}
+.gw-group{padding:0!important;overflow:hidden;border:0!important;box-shadow:0 16px 40px rgba(15,61,38,.10)!important;border-radius:22px!important}
+.gw-group-top{height:112px;background-size:cover;background-position:center;position:relative;display:flex;align-items:flex-end;padding:14px 18px}
+.gw-group-top::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 10%,var(--gt) 100%)}
+.gw-g{--gt:rgba(15,61,38,.93)}.gw-s{--gt:rgba(28,88,135,.93)}.gw-c{--gt:rgba(186,78,52,.93)}
+.gw-group-top h3{position:relative;color:#fff!important;margin:0!important;font-size:12.5px!important;letter-spacing:.18em!important}
+.gw-rows{padding:8px 10px 10px}
+.gw-g .gw-row:hover{background:#eef8f2!important}.gw-s .gw-row:hover{background:#eef5fb!important}.gw-c .gw-row:hover{background:#fdf1ec!important}
+@media (max-width:760px){
+  .gw-hero{min-height:190px}
+  .gw-group{display:block!important}
+  .gw-group-top{height:80px;padding:10px 14px}
+  .gw-rows{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px}
+  .gw-g .gw-row{background:#f1f9f4!important}.gw-s .gw-row{background:#eef6fc!important}.gw-c .gw-row{background:#fdf2ee!important}
+}
+/* ---- Jump bar: centred chips with a colour trim ---- */
+.b3j{background:linear-gradient(180deg,#0f3d26,#0b3120)!important;box-shadow:0 12px 28px rgba(15,61,38,.18)}
+.b3j::after{content:"";display:block;height:4px;background:linear-gradient(90deg,#17693f,#2fb37a 20%,#f07a5a 45%,#f2b84b 60%,#3b9fd8 80%,#9b5cc4)}
+.b3j{position:relative;overflow:hidden}
+.b3j::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 12% 0,rgba(47,179,122,.28),transparent 40%),radial-gradient(circle at 88% 100%,rgba(240,122,90,.22),transparent 40%);pointer-events:none}
+.b3j-in{display:block!important;overflow:hidden!important;padding:16px 0!important;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.b3j-track{display:flex;gap:12px;width:max-content;animation:b3JumpRoll 38s linear infinite}
+.b3j-dup{display:contents}
+.b3j-in:hover .b3j-track,.b3j-in:focus-within .b3j-track{animation-play-state:paused}
+@keyframes b3JumpRoll{to{transform:translateX(calc(-50% - 6px))}}
+.b3j a.b3j-chip{display:inline-flex;align-items:center;gap:9px;flex:0 0 auto;padding:11px 20px 11px 14px!important;border-radius:999px;font:600 14.5px/1 'Outfit',sans-serif!important;color:#fff!important;text-decoration:none;border:1px solid rgba(255,255,255,.18)!important;background:linear-gradient(135deg,var(--a),var(--b))!important;box-shadow:0 8px 20px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.18);transition:transform .2s ease,box-shadow .2s ease;white-space:nowrap}
+.b3j a.b3j-chip i{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;flex:none}
+.b3j a.b3j-chip i::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
+.b3j a.b3j-chip:hover,.b3j a.b3j-chip:focus-visible{transform:translateY(-2px) scale(1.03);box-shadow:0 12px 26px rgba(0,0,0,.26)}
+.b3j .c1{--a:#f07a5a;--b:#e2554a}.b3j .c2{--a:#1f8a5a;--b:#2fb37a}.b3j .c3{--a:#2f7fb3;--b:#4aa6dc}.b3j .c4{--a:#8a55b8;--b:#b07ad8}
+.b3j .c5{--a:#17a393;--b:#34c3b0}.b3j .c6{--a:#e6a52b;--b:#f2c14e}.b3j .c7{--a:#d0557a;--b:#ec7b9c}.b3j .c8{--a:#3d6b52;--b:#5f9577}
+@media (max-width:760px){.b3j-in{padding:12px 0!important}.b3j a.b3j-chip{font-size:13.5px!important;padding:9px 16px 9px 11px!important}.b3j-track{animation-duration:30s}}
+@media (prefers-reduced-motion:reduce){.b3j-track{animation:none;flex-wrap:wrap;justify-content:center;width:auto;padding:0 16px}.b3j-dup{display:none}.b3j-in{-webkit-mask-image:none;mask-image:none}}
+/* ---- Client stories: three at a time, moving on their own ---- */
+.st-sec .st-marquee{overflow:hidden;margin-top:30px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.st-sec .st-track{display:flex;gap:20px;width:max-content;padding:6px 0 14px;animation:b3StMarquee 48s linear infinite}
+.st-sec .st-dup{display:contents}
+.st-sec .st-marquee:hover .st-track,.st-sec .st-marquee:focus-within .st-track{animation-play-state:paused}
+.st-sec .st-track .st-card{flex:0 0 calc((min(1180px,100vw - 32px) - 40px) / 3);width:auto;margin:0!important}
+@keyframes b3StMarquee{to{transform:translateX(calc(-50% - 10px))}}
+@media (max-width:760px){.st-sec .st-track .st-card{flex-basis:84vw}.st-sec .st-track{animation-duration:40s}}
+@media (prefers-reduced-motion:reduce){.st-sec .st-track{animation:none;flex-wrap:wrap;width:auto}.st-sec .st-dup{display:none}.st-sec .st-track .st-card{flex:1 1 280px}}
+/* ---- Template purchase dialog & zip ---- */
+.b3-buy{position:fixed;inset:0;z-index:2147483600;background:rgba(10,30,20,.55);backdrop-filter:blur(4px);display:grid;place-items:center;padding:16px;overflow:auto}
+.b3-buy-card{position:relative;width:min(460px,100%);background:#fff;border-radius:24px;padding:26px 24px 22px;box-shadow:0 30px 80px rgba(0,0,0,.3);font-family:Outfit,Arial,sans-serif;color:#12241a;display:grid;gap:10px}
+.b3-buy-x{position:absolute;right:14px;top:12px;border:0;background:#f1f6f3;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:14px}
+.b3-buy-tag{font:600 11px/1 Outfit,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#17693f}
+.b3-buy-card h3{font:600 26px/1.15 'Cormorant Garamond',Georgia,serif;color:#0f3d26;margin:0}
+.b3-buy-price{font-size:22px;font-weight:700;color:#e2674f;margin:0}.b3-buy-price span{font-size:13px;color:#6b8176;font-weight:500}
+.b3-buy-note{font-size:13px;color:#5f7468;margin:0}.b3-buy-note a{color:#17693f;font-weight:600}
+.b3-buy-steps{margin:4px 0 6px 18px;padding:0;font-size:13.5px;line-height:1.55;color:#33463b}
+.b3-buy-card label{display:grid;gap:5px;font-size:12.5px;font-weight:600;color:#3f5a4b}
+.b3-buy-card input,.b3-buy-card select{font:inherit;font-weight:400;padding:11px 12px;border:1px solid #cfe3d7;border-radius:12px;background:#fff;color:#12241a}
+.b3-buy-err{background:#fdece6;color:#9a3a24;border-radius:10px;padding:10px 12px;font-size:13px}
+.b3-buy-go{border:0;border-radius:999px;background:#17693f;color:#fff;font:600 15px Outfit,sans-serif;padding:13px 18px;cursor:pointer;margin-top:4px}
+.b3-buy-go:disabled{opacity:.6}
+.b3-buy-done{display:grid;gap:10px;justify-items:center;text-align:center;padding:10px 0}
+.b3-buy-tick{width:56px;height:56px;border-radius:50%;background:#e3f3ea;color:#17693f;display:grid;place-items:center;font-size:26px;font-weight:700}
+#b3-zip{text-align:center;margin-top:22px}
+.b3-zip-btn{border:0;border-radius:999px;background:linear-gradient(90deg,#0f3d26,#1f8a7a);color:#fff;font:600 15px Outfit,sans-serif;padding:14px 24px;cursor:pointer;box-shadow:0 12px 28px rgba(15,61,38,.22)}
+.b3-zip-note{color:#5f7468;font-size:14px;margin:0}
+</style>
+<!-- B360:EXTRAS:END -->
 </head>
 <body>
 
@@ -2994,9 +3107,9 @@ body{background:#f7fcf9}
       <div class="nav-item">
         <button class="nav-drop-toggle" type="button">Plans <span class="nav-caret">⌄</span></button>
         <div class="nav-drop-menu">
-          <a href="#pricing">Personal Nutrition Plan <small>Everyday support for your body and routine</small></a>
-          <a href="#pricing">Specialist Clinical Plan <small>For health conditions and life-stage needs</small></a>
-          <a href="#pricing">Advanced Nutrition Program <small>Deeper support and ongoing guidance</small></a>
+          <a href="#pricing">Pantry Package <small>Everyday support for your body and routine</small></a>
+          <a href="#pricing">Banquet Package <small>For health conditions and life-stage needs</small></a>
+          <a href="#pricing">Feast Package <small>Deeper support and ongoing guidance</small></a>
           <a href="#pricing">Household Option <small>Shared meals with individual portions</small></a>
           <a href="#payment">Payment Verification <small>Submit your payment reference</small></a>
           <a href="#unlock-sec">Unlock Plan <small>Use your approval code</small></a>
@@ -3017,7 +3130,6 @@ body{background:#f7fcf9}
         <div class="nav-drop-menu">
           <a href="#payment">How Payment Works <small>Complete your plan securely</small></a>
           <a href="#unlock-sec">Approval Code Help <small>Open your approved guide</small></a>
-          <a href="/member/login">Member Portal <small>View plan status and saved plans</small></a>
           <a href="https://wa.me/256704392545">Contact / WhatsApp <small>Talk to Breyer</small></a>
           <a href="#faq">FAQs <small>Quick help and next steps</small></a>
         </div>
@@ -3068,9 +3180,9 @@ body{background:#f7fcf9}
   <details class="mob-group">
     <summary>Plans</summary>
     <div class="mob-sub">
-      <a href="#pricing" onclick="closeMob()">Personal Nutrition Plan</a>
-      <a href="#pricing" onclick="closeMob()">Specialist Clinical Plan</a>
-      <a href="#pricing" onclick="closeMob()">Advanced Nutrition Program</a>
+      <a href="#pricing" onclick="closeMob()">Pantry Package</a>
+      <a href="#pricing" onclick="closeMob()">Banquet Package</a>
+      <a href="#pricing" onclick="closeMob()">Feast Package</a>
       <a href="#pricing" onclick="closeMob()">Household Option</a>
       <a href="#payment" onclick="closeMob()">Payment Verification</a>
       <a href="#unlock-sec" onclick="closeMob()">Unlock Plan</a>
@@ -3091,7 +3203,6 @@ body{background:#f7fcf9}
     <div class="mob-sub">
       <a href="#payment" onclick="closeMob()">How Payment Works</a>
       <a href="#unlock-sec" onclick="closeMob()">Approval Code Help</a>
-      <a href="/member/login" onclick="closeMob()">Member Portal</a>
       <a href="https://wa.me/256704392545" onclick="closeMob()">Contact / WhatsApp</a>
       <a href="#faq" onclick="closeMob()">FAQ</a>
     </div>
@@ -3179,14 +3290,7 @@ body{background:#f7fcf9}
 
 <!-- PERSONALISED GATEWAYS -->
 <!-- B360:JUMP:START -->
-<nav class="b3j" aria-label="Jump to"><div class="b3j-in">
-<a href="#bmi-tool" class="b3j-main">Get my meal plan</a>
-<a href="#b360-launch" data-b360-open="diary">Track food</a>
-<a href="#pricing">Plans &amp; prices</a>
-<a href="#payment">Pay</a>
-<a href="#testimonials">Stories</a>
-<a href="#faq">FAQ</a>
-</div></nav>
+<nav class="b3j" aria-label="Jump to"><div class="b3j-in"><div class="b3j-track"><a href="#bmi-tool" class="b3j-chip c1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4"><i aria-hidden="true"></i>Pantry · Banquet · Feast</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8"><i aria-hidden="true"></i>Questions</a><span class="b3j-dup" aria-hidden="true"><a href="#bmi-tool" class="b3j-chip c1" tabindex="-1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary" tabindex="-1"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3" tabindex="-1"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4" tabindex="-1"><i aria-hidden="true"></i>Pantry · Banquet · Feast</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)" tabindex="-1"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6" tabindex="-1"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7" tabindex="-1"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8" tabindex="-1"><i aria-hidden="true"></i>Questions</a></span></div></div></nav>
 <!-- B360:JUMP:END -->
 <section id="personalised-gateways" class="gw" aria-labelledby="gw-title">
 <!-- B360:GATEWAYS:START -->
@@ -3197,21 +3301,21 @@ body{background:#f7fcf9}
       <p>Start with two minutes about you, then use the tools you need.</p>
     </div>
     <div class="gw-main">
-      <button type="button" class="gw-hero gw-hero-a" onclick="go('#bmi-tool')">
+      <button type="button" class="gw-hero gw-hero-a" onclick="go('#bmi-tool')"><span class="gw-hero-img" style="background-image:url(assets/bulamu360/optimized/service-personal-plan.jpg)" aria-hidden="true"></span>
         <span class="gw-hero-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
         <span class="gw-hero-txt"><small>Step 1 · Free</small><b>Understand your health</b><span>A quick assessment gives you a clear snapshot of your body, goals and routine.</span></span>
         <span class="gw-hero-cta">Start my assessment <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </button>
-      <button type="button" class="gw-hero gw-hero-b" onclick="go('#pricing')">
+      <button type="button" class="gw-hero gw-hero-b" onclick="go('#pricing')"><span class="gw-hero-img" style="background-image:url(assets/bulamu360/optimized/service-family-table.jpg)" aria-hidden="true"></span>
         <span class="gw-hero-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3.5"/><path d="M3 4v5M21 4v16"/></svg></span>
         <span class="gw-hero-txt"><small>Step 2</small><b>Get your meal plan</b><span>Menus built around your assessment, budget, health goals and local foods.</span></span>
         <span class="gw-hero-cta">See the plans <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </button>
     </div>
     <div class="gw-groups">
-      <div class="gw-group gw-g"><h3>Plan & track</h3><button type="button" class="gw-row" onclick="openToolSection('shopping-list')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg></span><span class="gw-txt"><b>Plan your shopping</b><small>A market-friendly list from your meals</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('templates-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM8.5 11h7M8.5 15h5"/></svg></span><span class="gw-txt"><b>Tracking templates</b><small>Food, water, sleep and habit sheets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('symptom-tracker')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><span class="gw-txt"><b>Notice health patterns</b><small>Link how you feel to what you eat</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#pricing')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z"/></svg></span><span class="gw-txt"><b>Your whole household</b><small>Shared menus and portions for family</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
-      <div class="gw-group gw-s"><h3>Learn about food</h3><button type="button" class="gw-row" onclick="openToolSection('local-intelligence')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 6-13 15-14-1 9-6 15-14 15"/><path d="M5 19l7-7"/></svg></span><span class="gw-txt"><b>Local foods</b><small>Ugandan favourites, eaten wisely</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-as-medicine')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11h16a8 8 0 0 1-16 0zM9 7c0-1.5 1-2 1-3M13 7c0-1.5 1-2 1-3"/></svg></span><span class="gw-txt"><b>Food as medicine</b><small>Foods for energy, digestion and heart</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('restaurant-guide')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M16 21V3c2 1 3 4 3 7h-3"/></svg></span><span class="gw-txt"><b>Eating out</b><small>Better choices at restaurants and events</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-analyzer')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3.5"/></svg></span><span class="gw-txt"><b>Meal analyser</b><small>Check portions and balance</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
-      <div class="gw-group gw-c"><h3>Get support</h3><button type="button" class="gw-row" onclick="openToolSection('chat-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg></span><span class="gw-txt"><b>Ask Bulamu Coach</b><small>Everyday food and planning questions</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('emotional-wellness')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.8 14a4 4 0 0 0 6.4 0M9.5 10h0M14.5 10h0"/></svg></span><span class="gw-txt"><b>Emotional wellness</b><small>Stress, cravings and mood, kindly</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" data-b360-open="diary"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3.5"/><path d="M3 4v5M21 4v16"/></svg></span><span class="gw-txt"><b>Track your food</b><small>Free diary with nutrients and targets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#testimonials')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><span class="gw-txt"><b>Client stories</b><small>Real results from Bulamu360 clients</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
+      <div class="gw-group gw-g"><div class="gw-group-top" style="background-image:url(assets/bulamu360/optimized/template-breakfast.jpg)"><h3>Plan & track</h3></div><div class="gw-rows"><button type="button" class="gw-row" onclick="openToolSection('shopping-list')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg></span><span class="gw-txt"><b>Plan your shopping</b><small>A market-friendly list from your meals</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('templates-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM8.5 11h7M8.5 15h5"/></svg></span><span class="gw-txt"><b>Tracking templates</b><small>Food, water, sleep and habit sheets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('symptom-tracker')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><span class="gw-txt"><b>Notice health patterns</b><small>Link how you feel to what you eat</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#pricing')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z"/></svg></span><span class="gw-txt"><b>Your whole household</b><small>Shared menus and portions for family</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div></div>
+      <div class="gw-group gw-s"><div class="gw-group-top" style="background-image:url(assets/bulamu360/optimized/template-local-foods.jpg)"><h3>Learn about food</h3></div><div class="gw-rows"><button type="button" class="gw-row" onclick="openToolSection('local-intelligence')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 6-13 15-14-1 9-6 15-14 15"/><path d="M5 19l7-7"/></svg></span><span class="gw-txt"><b>Local foods</b><small>Ugandan favourites, eaten wisely</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-as-medicine')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11h16a8 8 0 0 1-16 0zM9 7c0-1.5 1-2 1-3M13 7c0-1.5 1-2 1-3"/></svg></span><span class="gw-txt"><b>Food as medicine</b><small>Foods for energy, digestion and heart</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('restaurant-guide')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M16 21V3c2 1 3 4 3 7h-3"/></svg></span><span class="gw-txt"><b>Eating out</b><small>Better choices at restaurants and events</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-analyzer')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3.5"/></svg></span><span class="gw-txt"><b>Meal analyser</b><small>Check portions and balance</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div></div>
+      <div class="gw-group gw-c"><div class="gw-group-top" style="background-image:url(assets/bulamu360/optimized/cta-green-table.jpg)"><h3>Get support</h3></div><div class="gw-rows"><button type="button" class="gw-row" onclick="openToolSection('chat-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg></span><span class="gw-txt"><b>Ask Bulamu Coach</b><small>Everyday food and planning questions</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('emotional-wellness')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.8 14a4 4 0 0 0 6.4 0M9.5 10h0M14.5 10h0"/></svg></span><span class="gw-txt"><b>Emotional wellness</b><small>Stress, cravings and mood, kindly</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" data-b360-open="diary"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3.5"/><path d="M3 4v5M21 4v16"/></svg></span><span class="gw-txt"><b>Track your food</b><small>Free diary with nutrients and targets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#testimonials')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><span class="gw-txt"><b>Client stories</b><small>Real results from Bulamu360 clients</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div></div>
     </div>
     <div id="tool-lock-panel" class="tool-lock-panel" aria-live="polite"></div>
   </div>
@@ -4200,7 +4304,7 @@ body{background:#f7fcf9}
     <p class="b3-swipe" aria-hidden="true">Swipe for more →</p>
 <div class="price-grid" id="priceGrid"></div>
     <div id="consultationAddOnCard"></div>
-    <p style="text-align:center;margin-top:26px;font-size:15px;color:var(--muted)">Most clients begin with the <strong style="color:var(--earth1)">Bulamu Personal Nutrition Plan at UGX 70,000</strong>. <a href="#bmi-tool" style="color:var(--earth3);font-weight:700">Start My Assessment -></a></p>
+    <p class="b3-freeline" style="text-align:center;margin-top:26px;font-size:15px;color:var(--muted)"><strong style="color:var(--earth1)">Free account:</strong> food diary, dashboard, foods, biometrics, targets, 7-day reports and 4 tracking templates. <a href="#bmi-tool" style="color:var(--earth3);font-weight:700">Start my assessment →</a></p>
   </div>
 </section>
 
@@ -4537,14 +4641,14 @@ body{background:#f7fcf9}
 <section id="templates-section" class="app-tool-section" style="padding:80px 0;background:linear-gradient(135deg,var(--earth6),#e8f5e4)">
   <div class="wrap">
       <div class="section-toggle-bar light" onclick="toggleFeatureSection('templates-section')" style="border-bottom:2px solid var(--linen);margin-bottom:0">
-        <div class="section-toggle-title" style="color:var(--earth1)">📋 Free Tracking Templates</div>
+        <div class="section-toggle-title" style="color:var(--earth1)">📋 Tracking Templates</div>
         <div id="templates-section-ico" class="section-toggle-ico" style="color:var(--earth1);font-size:26px;font-weight:300">+</div>
       </div>
       <div id="templates-section-content" class="collapsible-section collapsed" style="padding-top:32px">
 
-    <span class="eyebrow">Free Tools</span>
+    <span class="eyebrow">Printable PDFs</span>
     <h2 class="sec-title">Download Your <em>Tracking Templates</em></h2>
-    <p style="color:var(--muted);font-size:15px;margin-bottom:32px;line-height:1.7">Beautiful, printable templates to track your food, sleep, exercise, hydration, and symptoms. Free to download.</p>
+    <p style="color:var(--muted);font-size:15px;margin-bottom:32px;line-height:1.7">Four templates are free. The Symptom Journal and Weekly Progress Review are UGX 7,000 each, or free with any package. Feast members also get every template in one zipped folder.</p>
     <div class="feat-section-grid" id="templates-grid"></div>
   
       </div></div>
@@ -4694,9 +4798,9 @@ body{background:#f7fcf9}
 <!-- ADVANCED MEMBERSHIP -->
 <section id="membership" class="legacy-public-section" style="padding:64px 0;background:linear-gradient(160deg,#0d3a22,#1a3514)">
   <div class="wrap" style="text-align:center">
-    <span class="eyebrow" style="color:var(--earth5)">Advanced membership</span>
-    <h2 class="sec-title" style="color:#fff">Advanced Nutrition Program <em style="color:#1f7a4a">Membership</em></h2>
-    <p style="color:rgba(255,255,255,.58);font-size:15px;margin:0 auto 30px;max-width:760px;line-height:1.75">No separate subscription product. When your Advanced Nutrition Program is approved, your member tools open for a 35-day support cycle. Renew monthly when you want continued coaching, tracking, and progress support.</p>
+    <span class="eyebrow" style="color:var(--earth5)">Feast membership</span>
+    <h2 class="sec-title" style="color:#fff">Feast Package <em style="color:#1f7a4a">Membership</em></h2>
+    <p style="color:rgba(255,255,255,.58);font-size:15px;margin:0 auto 30px;max-width:760px;line-height:1.75">No separate subscription product. When your Feast Package is approved, your member tools open for a monthly support cycle. Renew monthly when you want continued coaching, tracking, and progress support.</p>
     <div class="feat-section-grid-2">
       <div style="background:rgba(255,255,255,.07);border-radius:20px;padding:26px;border:1px solid rgba(255,255,255,.12);text-align:left">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.45);margin-bottom:12px">Free entry point</div>
@@ -4705,25 +4809,24 @@ body{background:#f7fcf9}
         <ul style="list-style:none;padding:0;margin:0 0 22px">
           <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Start the health and nutrition assessment</li>
           <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Receive a basic health snapshot</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Choose Personal, Specialist, or Advanced support</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Choose Pantry, Banquet or Feast</li>
           <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Submit payment reference for review</li>
         </ul>
         <a href="#bmi-tool" class="btn btn-outline btn-block" style="border-radius:var(--r2);padding:13px;font-size:14px;display:block;text-align:center;text-decoration:none">Start My Assessment -></a>
       </div>
       <div style="background:linear-gradient(160deg,rgba(31,122,74,.16),rgba(20,83,45,.48));border-radius:20px;padding:26px;border:1px solid rgba(31,122,74,.32);text-align:left;position:relative">
         <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#1f7a4a;color:#0d3a22;font-size:11px;font-weight:800;padding:4px 14px;border-radius:100px;white-space:nowrap">MEMBER ACCESS</div>
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1f7a4a;margin-bottom:12px">Advanced Nutrition Program</div>
-        <div style="font-family:'Libre Baskerville',serif;font-size:32px;font-weight:700;color:#fff;margin-bottom:4px">UGX 200K<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.5)">+</span></div>
-        <div style="font-size:13px;color:rgba(255,255,255,.48);margin-bottom:18px">35-day active access - renew monthly</div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1f7a4a;margin-bottom:12px">Feast Package</div>
+        <div style="font-family:'Libre Baskerville',serif;font-size:32px;font-weight:700;color:#fff;margin-bottom:4px">UGX 250K<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.5)"> / month</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.48);margin-bottom:18px">monthly active access - renew monthly</div>
         <ul style="list-style:none;padding:0;margin:0 0 22px">
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Everything in the Personal Nutrition Plan</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Everything in Pantry and Banquet</li>
           <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Ask Bulamu Coach access</li>
           <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Meal Analyzer and emotional wellness tools</li>
           <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Progress timeline and food diary review</li>
           <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Renew monthly for a fresh support cycle</li>
         </ul>
         <button onclick="go('#pricing')" class="btn btn-g btn-block" style="border-radius:var(--r2);padding:13px;font-size:14px">Subscribe / Renew Membership</button>
-        <a href="/member/login" class="btn btn-outline btn-block" style="border-radius:var(--r2);padding:12px;font-size:13px;margin-top:10px;text-align:center;text-decoration:none">Member Login</a>
       </div>
     </div>
   </div>
@@ -4743,11 +4846,9 @@ body{background:#f7fcf9}
       <span class="st-kicker">Client stories</span>
       <h2 id="st-title">Real people. <em>Real food.</em> Real progress.</h2>
     </div>
-    <div class="st-feature">
-      <div class="st-photo" role="img" aria-label="A shared family table of local foods"></div>
-      <figure class="st-big"><span class="st-quote" aria-hidden="true">“</span><blockquote>I wanted to lose weight without giving up the foods I know. The guide helped me understand portions, swaps, and what to buy from my market.</blockquote><div class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></div><figcaption><span class="st-av" aria-hidden="true" style="--c:#17693f">W</span><span><strong>Weight goal client</strong><span>Guided plan</span></span></figcaption></figure>
+    <div class="st-marquee" aria-label="Client stories">
+      <div class="st-track"><figure class="st-card" style="--c:#17693f;--t:#e5f7ee"><div class="st-top"><span class="st-av" aria-hidden="true">W</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“I wanted to lose weight without giving up the foods I know. The guide helped me understand portions, swaps, and what to buy from my market.”</blockquote><figcaption><strong>Weight goal client</strong><span>Guided plan</span></figcaption></figure><figure class="st-card" style="--c:#3b9fd8;--t:#e6f3fb"><div class="st-top"><span class="st-av" aria-hidden="true">B</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The blood sugar guidance was clear enough to follow at home, and it gave me sensible questions to discuss with my clinician.”</blockquote><figcaption><strong>Blood sugar support client</strong><span>Specialist plan</span></figcaption></figure><figure class="st-card" style="--c:#f07a5a;--t:#fdeee9"><div class="st-top"><span class="st-av" aria-hidden="true">F</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The household plan helped us share meals while adjusting portions for different ages, routines, and food preferences.”</blockquote><figcaption><strong>Family meal planning client</strong><span>Family plan</span></figcaption></figure><figure class="st-card" style="--c:#9b5cc4;--t:#f3ebfa"><div class="st-top"><span class="st-av" aria-hidden="true">P</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The plan felt practical because it used foods I already cook at home and gave clearer portions than generic diet advice.”</blockquote><figcaption><strong>Personal plan client</strong><span>Clinical nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#1fb5a4;--t:#e3f7f5"><div class="st-top"><span class="st-av" aria-hidden="true">H</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The family guidance made shopping and cooking easier because the meals were built around our budget and shared household foods.”</blockquote><figcaption><strong>Household client</strong><span>Family nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#17693f;--t:#e5f7ee"><div class="st-top"><span class="st-av" aria-hidden="true">C</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The strongest part was the structure: meals, portions, substitutions, and follow-up notes in one place.”</blockquote><figcaption><strong>Complete plan client</strong><span>Personal nutrition plan</span></figcaption></figure><span class="st-dup" aria-hidden="true"><figure class="st-card" style="--c:#17693f;--t:#e5f7ee"><div class="st-top"><span class="st-av" aria-hidden="true">W</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“I wanted to lose weight without giving up the foods I know. The guide helped me understand portions, swaps, and what to buy from my market.”</blockquote><figcaption><strong>Weight goal client</strong><span>Guided plan</span></figcaption></figure><figure class="st-card" style="--c:#3b9fd8;--t:#e6f3fb"><div class="st-top"><span class="st-av" aria-hidden="true">B</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The blood sugar guidance was clear enough to follow at home, and it gave me sensible questions to discuss with my clinician.”</blockquote><figcaption><strong>Blood sugar support client</strong><span>Specialist plan</span></figcaption></figure><figure class="st-card" style="--c:#f07a5a;--t:#fdeee9"><div class="st-top"><span class="st-av" aria-hidden="true">F</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The household plan helped us share meals while adjusting portions for different ages, routines, and food preferences.”</blockquote><figcaption><strong>Family meal planning client</strong><span>Family plan</span></figcaption></figure><figure class="st-card" style="--c:#9b5cc4;--t:#f3ebfa"><div class="st-top"><span class="st-av" aria-hidden="true">P</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The plan felt practical because it used foods I already cook at home and gave clearer portions than generic diet advice.”</blockquote><figcaption><strong>Personal plan client</strong><span>Clinical nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#1fb5a4;--t:#e3f7f5"><div class="st-top"><span class="st-av" aria-hidden="true">H</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The family guidance made shopping and cooking easier because the meals were built around our budget and shared household foods.”</blockquote><figcaption><strong>Household client</strong><span>Family nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#17693f;--t:#e5f7ee"><div class="st-top"><span class="st-av" aria-hidden="true">C</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The strongest part was the structure: meals, portions, substitutions, and follow-up notes in one place.”</blockquote><figcaption><strong>Complete plan client</strong><span>Personal nutrition plan</span></figcaption></figure></span></div>
     </div>
-    <div class="st-rail" tabindex="0" aria-label="More client stories, scroll sideways"><figure class="st-card" style="--c:#3b9fd8;--t:#e6f3fb"><div class="st-top"><span class="st-av" aria-hidden="true">B</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The blood sugar guidance was clear enough to follow at home, and it gave me sensible questions to discuss with my clinician.”</blockquote><figcaption><strong>Blood sugar support client</strong><span>Specialist plan</span></figcaption></figure><figure class="st-card" style="--c:#f07a5a;--t:#fdeee9"><div class="st-top"><span class="st-av" aria-hidden="true">F</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The household plan helped us share meals while adjusting portions for different ages, routines, and food preferences.”</blockquote><figcaption><strong>Family meal planning client</strong><span>Family plan</span></figcaption></figure><figure class="st-card" style="--c:#9b5cc4;--t:#f3ebfa"><div class="st-top"><span class="st-av" aria-hidden="true">P</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The plan felt practical because it used foods I already cook at home and gave clearer portions than generic diet advice.”</blockquote><figcaption><strong>Personal plan client</strong><span>Clinical nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#1fb5a4;--t:#e3f7f5"><div class="st-top"><span class="st-av" aria-hidden="true">H</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The family guidance made shopping and cooking easier because the meals were built around our budget and shared household foods.”</blockquote><figcaption><strong>Household client</strong><span>Family nutrition plan</span></figcaption></figure><figure class="st-card" style="--c:#17693f;--t:#e5f7ee"><div class="st-top"><span class="st-av" aria-hidden="true">C</span><span class="st-stars" aria-label="5 out of 5"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 1.8l2.5 5.3 5.7.7-4.2 3.9 1.1 5.7L10 14.6l-5.1 2.8 1.1-5.7L1.8 7.8l5.7-.7z"/></svg></span></div><blockquote>“The strongest part was the structure: meals, portions, substitutions, and follow-up notes in one place.”</blockquote><figcaption><strong>Complete plan client</strong><span>Personal nutrition plan</span></figcaption></figure></div>
     <p class="st-note">Stories shared by Bulamu360 clients. Names withheld for privacy.</p>
   </div>
 </section>
@@ -4769,9 +4870,9 @@ body{background:#f7fcf9}
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">How does payment verification work?<div class="fq-ic">+</div></button><div class="fq-ans">After choosing a plan, select Airtel or MTN, send the exact amount to the displayed number, then submit the real transaction reference from your SMS. Your plan unlocks after review and approval.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Why is approval needed before I receive my plan?<div class="fq-ic">+</div></button><div class="fq-ans">Approval protects both the client and Bulamu360. It confirms the payment reference before the personalised guide, download link, or approval code is released.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can Bulamu360 create family or household meal plans?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Household support considers family size, ages, routines, food budget, preferences, health concerns, school or work meals, shared shopping lists, and age-appropriate portions.</div></div>
-        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can I use Bulamu360 if I have diabetes, high blood pressure, kidney concerns, or pregnancy needs?<div class="fq-ic">+</div></button><div class="fq-ans">Yes, but choose the Specialist Clinical Plan when a medical condition or life-stage concern needs deeper nutrition safety. Serious symptoms or medication changes should always be handled with your clinician.</div></div>
+        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can I use Bulamu360 if I have diabetes, high blood pressure, kidney concerns, or pregnancy needs?<div class="fq-ic">+</div></button><div class="fq-ans">Yes, but choose the Banquet Package when a medical condition or life-stage concern needs deeper nutrition safety. Serious symptoms or medication changes should always be handled with your clinician.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Will the plan force me to stop eating my usual foods?<div class="fq-ic">+</div></button><div class="fq-ans">No. Bulamu360 focuses on better portions, smarter swaps, preparation methods, balance, and consistency. The goal is progress you can live with, not shame or punishment.</div></div>
-        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Do I need an Advanced Nutrition Program to use Ask Bulamu Coach or the Meal Analyzer?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Ask Bulamu Coach and the Meal Analyzer are part of the Advanced Nutrition Program. Once your Advanced payment is approved, these tools stay active for 35 days, then you can renew monthly for continued access.</div></div>
+        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Do I need an Feast Package to use Ask Bulamu Coach or the Meal Analyzer?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Ask Bulamu Coach and the Meal Analyzer are part of the Feast Package. Once your Advanced payment is approved, these tools stay active for 35 days, then you can renew monthly for continued access.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Is my health information private?<div class="fq-ic">+</div></button><div class="fq-ans">Bulamu360 collects health information only to prepare your nutrition guidance and manage your order. Use the live secure link for customer submissions, not editable source files.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Does Bulamu360 use blood type diets?<div class="fq-ic">+</div></button><div class="fq-ans">No. Blood group is not used to decide your diet. Guidance is based on nutrition science, goals, health conditions, medication context, labs where shared, allergies, budget, food access, and safety.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">How do I contact Bulamu360 for help?<div class="fq-ic">+</div></button><div class="fq-ans">You can contact Breyer through the phone and WhatsApp details on the page if you need help with payment, approval codes, plan access, or choosing the right support level.</div></div>
@@ -4847,15 +4948,15 @@ var BULAMU_ENTITLEMENTS = {
   advanced:['templates-section','shopping-list','local-intelligence','food-as-medicine','restaurant-guide','symptom-tracker','emotional-wellness','chat-section','food-analyzer']
 };
 var BULAMU_TOOL_META = {
-  'chat-section':{name:'Ask Bulamu Coach', level:'advanced', cta:'Subscribe / Renew Membership', note:'Ask Bulamu Coach is part of the Advanced Nutrition Program because personalised questions need more context and ongoing support.'},
-  'food-analyzer':{name:'Meal Analyzer', level:'advanced', cta:'Subscribe / Renew Membership', note:'Meal analysis is part of the Advanced Nutrition Program because condition-aware food interpretation should use your approved profile.'},
+  'chat-section':{name:'Ask Bulamu Coach', level:'advanced', cta:'Subscribe / Renew Membership', note:'Ask Bulamu Coach is part of the Feast Package because personalised questions need more context and ongoing support.'},
+  'food-analyzer':{name:'Meal Analyzer', level:'advanced', cta:'Subscribe / Renew Membership', note:'Meal analysis is part of the Feast Package because condition-aware food interpretation should use your approved profile.'},
   'templates-section':{name:'Tracking Templates', level:'free', cta:'View Templates', note:'These simple templates can support food, symptom, sleep, hydration, and habit tracking.'},
   'shopping-list':{name:'Shopping Lists', level:'personal', cta:'Choose My Plan', note:'Shopping lists are part of the paid nutrition guidance because they depend on your assessment, budget, household size, and plan.'},
   'local-intelligence':{name:'Local Food Intelligence', level:'personal', cta:'Choose My Plan', note:'Local food guidance becomes more useful when it is connected to your goal, health status, budget, and approved plan.'},
   'food-as-medicine':{name:'Food as Medicine', level:'personal', cta:'Choose My Plan', note:'Food-as-medicine guidance is educational and should be personalised carefully, especially where health conditions are involved.'},
   'restaurant-guide':{name:'Restaurant Guide', level:'personal', cta:'Choose My Plan', note:'Restaurant guidance is included with paid support so it can reflect your health priorities and plan.'},
-  'symptom-tracker':{name:'Symptom Tracker', level:'specialist', cta:'Choose Specialist Support', note:'Symptom review can involve medical risk. The deeper tracker is best used with Specialist or Advanced support.'},
-  'emotional-wellness':{name:'Emotional Wellness', level:'advanced', cta:'Subscribe / Renew Membership', note:'Emotional nutrition support is part of the Advanced Nutrition Program because it needs more ongoing context and follow-up.'}
+  'symptom-tracker':{name:'Symptom Tracker', level:'specialist', cta:'Choose Banquet', note:'Symptom review can involve medical risk. The deeper tracker is best used with Specialist or Advanced support.'},
+  'emotional-wellness':{name:'Emotional Wellness', level:'advanced', cta:'Subscribe / Renew Membership', note:'Emotional nutrition support is part of the Feast Package because it needs more ongoing context and follow-up.'}
 };
 
 // Public backend used for customer orders, approvals, downloads, and email.
@@ -5130,13 +5231,13 @@ function showLockedTool(featureId){
   var meta = BULAMU_TOOL_META[featureId] || {name:'This tool', level:'personal', cta:'Choose My Plan', note:'This feature unlocks after the right plan is approved.'};
   var panel = document.getElementById('tool-lock-panel');
   if(!panel) return;
-  var levelText = meta.level === 'advanced' ? 'Advanced Nutrition Program' : meta.level === 'specialist' ? 'Specialist Clinical Plan or Advanced Nutrition Program' : 'Bulamu Personal Nutrition Plan or higher';
+  var levelText = meta.level === 'advanced' ? 'the Feast Package' : meta.level === 'specialist' ? 'Banquet or Feast' : 'Pantry, Banquet or Feast';
   var status = window.BULAMU_MEMBER_STATUS || {};
   var approvedText = status.loggedIn
     ? 'Your member status is <strong>' + (status.statusLabel || 'being reviewed') + '</strong>' + (status.packageName ? ' for <strong>' + status.packageName + '</strong>.' : '.')
     : (currentPlanName() ? 'Your selected support is currently: <strong>' + currentPlanName() + '</strong>.' : 'Start with the assessment, then choose the support level that fits your needs.');
   var renewalText = status.activeUntil
-    ? '<p><strong>Your Advanced access is active until ' + status.activeUntil + '.</strong>' + (status.renewalReminder ? ' ' + status.renewalReminder : '') + '</p>'
+    ? '<p><strong>Your package is active until ' + status.activeUntil + '.</strong>' + (status.renewalReminder ? ' ' + status.renewalReminder : '') + '</p>'
     : '';
   panel.innerHTML =
     '<h4>' + meta.name + ' unlocks with ' + levelText + '</h4>' +
@@ -5145,7 +5246,7 @@ function showLockedTool(featureId){
     '<p>' + approvedText + ' Paid tools open after the matching plan is active or after you unlock an approved plan.</p>' +
     '<div class="tool-lock-actions">' +
       '<button class="btn btn-g" type="button" onclick="go(\'#pricing\')">' + meta.cta + '</button>' +
-      '<button class="btn btn-outline" type="button" onclick="location.href=\'' + memberPortalUrl() + '\'">Member Login</button>' +
+      '<button class="btn btn-outline" type="button" onclick="if(window.B360&&B360.app){B360.app.open(\'diary\')}">Sign in</button>' +
       '<button class="btn btn-outline" type="button" onclick="go(\'#unlock-sec\')">Unlock My Plan</button>' +
     '</div>';
   panel.classList.add('show');
@@ -5256,24 +5357,18 @@ function toggleSection(secId, btnId){
 /* PRICING RENDER */
 window.onload = function(){
   var pkgs = [
-    {tier:'Bulamu Personal Nutrition Plan', val:'70K', suf:'',
-     per:'individual plan; household priced by family size',
-     badge:'Most Popular',
-     desc:'The flagship plan for most clients who want clear nutrition direction without clinical complexity.',
-     inc:['Who it is for: everyday weight goals, energy, wellness, and practical family food decisions','What you receive: health snapshot, 30-day food plan, portions, swaps, shopping list, restaurant guide, food-as-medicine guide, and local market intelligence','After payment: submit your reference, wait for review, then unlock your approved guide','Why it is popular: it gives enough structure for real life without overwhelming you. Household pricing starts at 3 members: UGX 200,000'],
-     why:'Best first choice for most clients because it balances value, clarity, and practical follow-through.', best:true},
-    {tier:'Specialist Clinical Plan', val:'120K', suf:'+',
-     per:'based on assessment complexity',
-     badge:'Clinical Review',
-     desc:'For chronic disease, lab concerns, pregnancy, child or teen nutrition, and life-stage needs that require more careful food decisions.',
-     inc:['Who it is for: diabetes, blood pressure, cholesterol, kidney support, PMOS, gut issues, anaemia, thyroid, pregnancy, child and teen needs','What you receive: everything in Personal, plus condition-aware guidance, safety-gate awareness, and a 30 to 60 day clinical structure','After payment: Breyer reviews the request before the guide is released','Why choose it: safer limits, clearer clinical wording, and more careful food decisions'],
-     why:'Designed for people whose nutrition choices need more caution, context, and precision.', best:false},
-    {tier:'Advanced Nutrition Program', val:'200K', suf:'+',
-     per:'35-day membership cycle; renew monthly',
-     badge:'Deep Support',
-     desc:'A premium 35-day membership cycle for clients who want deeper personalisation, behaviour support, progress review, and guided nutrition tools.',
-     inc:['Who it is for: clients who want stronger accountability, habit support, and more ongoing guidance','What you receive: everything in Personal, plus emotional nutrition coach, Ask Bulamu Coach, meal analysis, symptom tracker, food diary, and progress support','After payment: approval activates Advanced member access for 35 days','Renewal: renew monthly when you want continued tools, plan updates, and follow-up support'],
-     why:'Most desirable for clients who want more than a plan: support, coaching tools, and a renewable 35-day guidance cycle.', cta:'Subscribe / Renew Membership', best:false}
+    {tier:'Pantry Package', val:'75K', suf:'', per:'per month · cancel any time', badge:'Most Popular',
+     desc:'Your personal nutrition plan plus the everyday tools to follow it.',
+     inc:['Personal 30-day meal plan from your assessment','Food diary with trends, fasting and cycle tracking','All tracking templates (PDF)','Shopping lists, local foods, food as medicine and eating-out guides','30-day PDF reports'],
+     why:'Best first choice: clear direction and practical tools.', cta:'Start with Pantry', best:true},
+    {tier:'Banquet Package', val:'150K', suf:'', per:'per month', badge:'Clinical Care',
+     desc:'For health conditions, pregnancy, children and teens, reviewed carefully by Breyer.',
+     inc:['Everything in Pantry','Condition-aware clinical plan with safety checks','Full nutrient analysis in your account','Care team: share your tracker and message Breyer','Symptom tracker'],
+     why:'For food choices that need more care and precision.', cta:'Choose Banquet', best:false},
+    {tier:'Feast Package', val:'250K', suf:'', per:'per month', badge:'Everything Included',
+     desc:'Every Bulamu360 tool, deeper coaching and ongoing support.',
+     inc:['Everything in Banquet','Ask Bulamu Coach and the smart Assistant','Meal Analyzer and emotional wellness support','Zipped folder of every tracking template','Priority progress reviews'],
+     why:'The full experience, renewed each month.', cta:'Choose Feast', best:false}
   ];
   document.getElementById('priceGrid').innerHTML = pkgs.map(function(p){
     return '<div class="pcard' + (p.best ? ' best' : '') + '">' +
@@ -6004,7 +6099,7 @@ function buildClinicalRiskFrame(){
 }
 
 function isSpecialistClinicalPlan(){
-  return (ST.pkg && /Specialist Clinical/i.test(ST.pkg.name || '')) || hasClinicalComplexity();
+  return (ST.pkg && /Specialist Clinical|Banquet/i.test(ST.pkg.name || '')) || hasClinicalComplexity();
 }
 function hasClinicalComplexity(){
   var clinicalGoals = ['diabetes','hypertension','cholesterol','PMOS','kidney','prenatal'];
@@ -7379,40 +7474,40 @@ function buildPkgs(){
     var famPrice = householdPlanPrice(famCount);
     if(!famPrice){
       return [
-        {name:'Bulamu Personal Nutrition Plan - Household Custom Quote', price:0, priceLabel:'Contact Bulamu', desc:'Households of 6 or more receive a custom quote so member needs, health concerns, shared meals, portions, rotations, and shopping quantities can be planned properly.'}
+        {name:'Pantry Package - Household Custom Quote', price:0, priceLabel:'Contact Bulamu', desc:'Households of 6 or more receive a custom quote so member needs, health concerns, shared meals, portions, rotations, and shopping quantities can be planned properly.'}
       ];
     }
     return [
-      {name:'Bulamu Personal Nutrition Plan - Household (' + famCount + ' members)', price:famPrice, desc:'Household nutrition inside the personal plan: member details, shared meal planning, age-specific portions, family rotations, and shopping lists scaled for ' + famCount + ' people.'}
+      {name:'Pantry Package - Household (' + famCount + ' members)', price:famPrice, desc:'Household nutrition inside the personal plan: member details, shared meal planning, age-specific portions, family rotations, and shopping lists scaled for ' + famCount + ' people.'}
     ];
   }
   if(ST.plantype === 'child' || ST.goal === 'child') return [
-    {name:'Specialist Clinical Plan - Child', price:120000, desc:'UGX 120,000+ paediatric nutrition with growth monitoring, school-food guidance, caregiver instructions, and safety notes.'}
+    {name:'Banquet Package - Child', price:150000, desc:'UGX 150,000 a month. paediatric nutrition with growth monitoring, school-food guidance, caregiver instructions, and safety notes.'}
   ];
   if(ST.plantype === 'teen') return [
-    {name:'Specialist Clinical Plan - Teen', price:120000, desc:'UGX 120,000+ adolescent nutrition for growth, hormonal health, energy, sports performance, and academic focus.'}
+    {name:'Banquet Package - Teen', price:150000, desc:'UGX 150,000 a month. adolescent nutrition for growth, hormonal health, energy, sports performance, and academic focus.'}
   ];
   if(ST.goal === 'prenatal') return [
-    {name:'Specialist Clinical Plan - Pregnancy', price:120000, desc:'UGX 120,000+ pregnancy nutrition with trimester-specific meal guidance, micronutrient priorities, and safety notes.'}
+    {name:'Banquet Package - Pregnancy', price:150000, desc:'UGX 150,000 a month. pregnancy nutrition with trimester-specific meal guidance, micronutrient priorities, and safety notes.'}
   ];
   if(isComp) return [
-    {name:'Specialist Clinical Plan', price:120000, desc:'UGX 120,000+ clinical dietary plan tailored to your condition(s), labs, symptoms, contraindications, and 30 to 60 day structure.'}
+    {name:'Banquet Package', price:150000, desc:'UGX 150,000 a month. clinical dietary plan tailored to your condition(s), labs, symptoms, contraindications, and 30 to 60 day structure.'}
   ];
   if(ST.activity === 'active') return [
-    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship plan with sports-aware fuelling, recovery meals, protein targets, hydration, and progress tracking.'},
-    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, performance nutrition, habit coaching, progress review, and ongoing personalisation.'}
+    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship plan with sports-aware fuelling, recovery meals, protein targets, hydration, and progress tracking.'},
+    {name:'Feast Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, performance nutrition, habit coaching, progress review, and ongoing personalisation.'}
   ];
   if(ST.bmi >= 18.5 && ST.bmi < 25) return [
-    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship 30-day plan for energy, immunity, gut health, food rhythm, portions, and practical everyday eating.'},
-    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, deeper personalisation, progress review, and long-term habit change.'}
+    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship 30-day plan for energy, immunity, gut health, food rhythm, portions, and practical everyday eating.'},
+    {name:'Feast Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, deeper personalisation, progress review, and long-term habit change.'}
   ];
   if(ST.bmi < 18.5) return [
-    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 structured weight-gain plan with progressive calories, protein targets, deficiency-aware foods, and practical portions.'},
-    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, appetite, energy, symptoms, progress review, and sustained weight restoration.'}
+    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Structured weight-gain plan with progressive calories, protein targets, deficiency-aware foods, and practical portions.'},
+    {name:'Feast Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, appetite, energy, symptoms, progress review, and sustained weight restoration.'}
   ];
   return [
-    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship 30-day plan with weekly progression, macro targets, micronutrient priorities, portions, local foods, and shopping guidance.'},
-    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for clients who want extended guidance, deeper personalisation, premium tools, and progress review.'}
+    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship 30-day plan with weekly progression, macro targets, micronutrient priorities, portions, local foods, and shopping guidance.'},
+    {name:'Feast Package', price:250000, desc:'UGX 250,000 a month. Everything included: clients who want extended guidance, deeper personalisation, premium tools, and progress review.'}
   ];
 }
 
@@ -7703,7 +7798,7 @@ async function unlockApprovedPlan(e){
     var sum = document.getElementById('approved-plan-summary');
     if(sum){
       var memberLine = data.order.memberLevel === 'advanced' && data.order.activeUntil
-        ? '<br><span style="font-weight:600;color:var(--earth2)">Your Advanced access is active until ' + data.order.activeUntil + '.</span>' + (data.order.renewalReminder ? '<br><span style="font-weight:600;color:#b3542f">' + data.order.renewalReminder + '</span>' : '')
+        ? '<br><span style="font-weight:600;color:var(--earth2)">Your package is active until ' + data.order.activeUntil + '.</span>' + (data.order.renewalReminder ? '<br><span style="font-weight:600;color:#b3542f">' + data.order.renewalReminder + '</span>' : '')
         : '';
       sum.innerHTML = 'Approved plan unlocked for ' + data.order.name + ' - ' + data.order.packageName + ' - ' + data.order.amount + memberLine;
     }
@@ -10925,7 +11020,7 @@ function showMedicineDetail(idx){
    PREMIUM CHAT MODAL
 ============================================= */
 function openPremiumChat(){
-  alert('Advanced Nutrition Program is the Bulamu360 membership. Choose the Advanced plan, submit your Mobile Money reference, and after approval your premium tools stay active for 35 days. Renew monthly when you want continued access.');
+  alert('Feast Package is the Bulamu360 membership. Choose the Feast Package, submit your Mobile Money reference, and after approval your premium tools stay active for 35 days. Renew monthly when you want continued access.');
 }
 
 
@@ -14214,6 +14309,7 @@ V.diary = function(main){
   var tabs = N.groups.filter(function(g){ return g[0] !== 'amino' || D().settings.showAmino; });
   main.innerHTML = head('Diary', '',
     '<button type="button" class="b-btn b-btn-sm" data-act="copyPrev">Copy from yesterday…</button><button type="button" class="b-btn b-btn-sm" data-act="newGroup">' + B.icon('plus', 14) + 'Meal group</button>') + setupCallout() +
+    '<div class="b-panel b-energy-top"><div class="b-panel-head"><h3>Energy summary</h3><span class="b-sub">' + tot.count + (tot.count === 1 ? ' entry' : ' entries') + '</span></div><div class="b-panel-body">' + B.energySummary(date) + '</div></div>' +
     '<div class="b-addbar" role="toolbar" aria-label="Add to diary">' +
       '<button type="button" class="b-addbar-btn is-primary" data-add="food">' + B.icon('plus', 16) + 'Food</button>' +
       '<button type="button" class="b-addbar-btn" data-add="exercise">' + B.icon('plus', 16) + 'Exercise</button>' +
@@ -14227,7 +14323,6 @@ V.diary = function(main){
         (ex.length ? '<table class="b-table"><tbody>' + ex.map(function(x){ return '<tr><td>' + U.esc(x.name) + '<div class="b-xs b-muted">' + (x.minutes ? x.minutes + ' min · ' : '') + U.esc(x.time) + '</div></td><td class="b-right">' + (x.kcal != null ? x.kcal + ' kcal' : '–') + ' ' + (x.estimated ? '<span class="b-src est">Est.</span>' : x.source !== 'manual' ? '<span class="b-src imp">Imported</span>' : '') + '</td><td class="b-right"><button type="button" class="b-btn b-btn-ghost b-btn-icon b-btn-sm" data-delx="' + x.id + '" aria-label="Delete ' + U.esc(x.name) + '">' + B.icon('trash', 15) + '</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="b-muted b-small">No exercise logged for this day.</p>') + '</div></div>' +
       '<div class="b-panel"><div class="b-panel-head"><h3>Notes</h3></div><div class="b-panel-body"><textarea class="b-textarea" data-notes aria-label="Day notes" placeholder="How did today go? Anything unusual (illness, travel, celebration)?">' + U.esc(Diary.day(date).notes || '') + '</textarea></div></div></div>' +
       '<div class="b-stack">' +
-        '<div class="b-panel"><div class="b-panel-head"><h3>Energy summary</h3><span class="b-sub">' + tot.count + (tot.count === 1 ? ' entry' : ' entries') + '</span></div><div class="b-panel-body">' + B.energySummary(date) + '</div></div>' +
         '<div class="b-panel"><div class="b-panel-head"><h3>Targets</h3><span class="b-sub">' + U.esc((B.macroModes[t.mode] || {}).name || '') + (t.dayType ? ' · ' + U.esc(t.dayType.name) : '') + '</span></div><div class="b-panel-body">' + B.macroTargets(date) + '</div></div>' +
         '<div class="b-panel"><div class="b-panel-head"><h3>Nutrient targets</h3><span class="b-sub">Tap a bar for its sources</span></div>' +
         '<div class="b-tabs" role="tablist" style="padding:0 8px">' + tabs.map(function(g){ return '<button type="button" role="tab" data-ntab="' + g[0] + '" aria-selected="' + (V.diary.tab === g[0]) + '">' + g[1] + '</button>'; }).join('') + '</div>' +
@@ -15317,11 +15412,11 @@ A.loadData = function(){
     B.store.load();
     if (!hasEntries(B.store.data)) {
       var legacy = null; try { legacy = JSON.parse(localStorage.getItem(B.store.LEGACY_KEY) || 'null'); } catch (e) {}
-      if (hasEntries(legacy)) return new Promise(function(res){
+      // Ask once the tracker is on screen (a dialog inside the hidden tracker would never be seen).
+      if (hasEntries(legacy) && !A.askedLegacy) { A.askedLegacy = true; setTimeout(function(){
         B.ui.dialog({ title:'Bring your earlier tracker data?', sheet:false, body:'<p>This device has food diary entries saved before accounts existed. Add them to <b>' + U.esc(A.user.email) + '</b>?</p><p class="b-small b-muted" style="margin-top:8px">Only do this if the data is yours.</p>',
-          buttons:[{ label:'No, start fresh', close:true }, { label:'Yes, add to my account', primary:true, onClick:function(){ B.store.data = B.store.merge ? B.store.merge(B.store.defaults(), legacy) : legacy; B.store.save(true); try { localStorage.removeItem(B.store.LEGACY_KEY); } catch (e) {} A.saveNow(); return true; } }],
-          onClose:res });
-      });
+          buttons:[{ label:'No, start fresh', close:true }, { label:'Yes, add to my account', primary:true, onClick:function(){ B.store.data = B.store.merge ? B.store.merge(B.store.defaults(), legacy) : legacy; B.store.save(true); try { localStorage.removeItem(B.store.LEGACY_KEY); } catch (e) {} A.saveNow(); try { B.app.render(); } catch (e) {} return true; } }] });
+      }, 700); }
     }
   }).catch(function(err){
     B.store.load();
@@ -15491,6 +15586,171 @@ function initRail(){
   rail.addEventListener('keydown', function(e){ if (e.key === 'ArrowRight') { e.preventDefault(); rail.scrollBy({ left:300, behavior:'smooth' }); } if (e.key === 'ArrowLeft') { e.preventDefault(); rail.scrollBy({ left:-300, behavior:'smooth' }); } });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initRail); else initRail();
+})();
+
+/* ---- 19-packages.js ---- */
+/* ---------------- Packages: Free / Pantry / Banquet / Feast abilities, templates, plan in "My account" ---------------- */
+(function(){
+'use strict';
+var B = window.B360, U = B.util, A = B.account;
+if (!A) return;
+var RANK = { free:0, personal:1, specialist:2, advanced:3 };
+var TIER = { free:'Free', personal:'Pantry', specialist:'Banquet', advanced:'Feast' };
+var PRICE = { personal:'UGX 75,000', specialist:'UGX 150,000', advanced:'UGX 250,000' };
+// Tracker pages that need a package (everything else is free)
+var NEEDS = { trends:'personal', fasting:'personal', cycle:'personal', analysis:'specialist', care:'specialist', assistant:'advanced' };
+var TEMPLATES = [
+  ['foodLog','Food Diary','30-day meals, water and energy', false],
+  ['sleepLog','Sleep Tracker','30-day sleep quality table', false],
+  ['activityLog','Activity Log','Daily movement and intensity', false],
+  ['hydrationLog','Hydration Tracker','Tick-a-glass daily water log', false],
+  ['symptomLog','Symptom Journal','Symptoms, triggers, energy, mood', true],
+  ['weeklyLog','Weekly Progress Review','4 weekly check-ins', true]
+];
+var ALIAS = { food:'foodLog', sleep:'sleepLog', sports:'activityLog', weight:'weeklyLog', cycle:'symptomLog', symptoms:'symptomLog' };
+
+function plan(){ return (A.user && A.user.plan) || { level:'free', tier:'Free', templates:[], allTemplates:false, templateZip:false }; }
+function has(level){ return RANK[plan().level] >= RANK[level]; }
+A.plan = plan; A.has = has;
+function canTemplate(id){ var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0]; var p = plan(); return !!t && (!t[3] || p.allTemplates || (p.templates || []).indexOf(id) > -1); }
+function goPricing(){ try { B.app.close(); } catch (e) {} setTimeout(function(){ if (typeof window.go === 'function') window.go('#pricing'); else location.hash = '#pricing'; }, 80); }
+function refreshMember(){ try { if (typeof window.getMemberStatus === 'function') window.getMemberStatus(true); } catch (e) {} }
+
+/* ---------- Refresh the plan after sign-in ---------- */
+A.refreshPlan = function(){ return A.api('me').then(function(j){ A.user = j.user; refreshMember(); decorateTemplates(); return j.user; }).catch(function(){}); };
+var prevLoad = A.loadData;
+A.loadData = function(){ refreshMember(); decorateTemplates(); return prevLoad.apply(this, arguments); };
+
+/* ---------- Lock paid tracker pages ---------- */
+Object.keys(NEEDS).forEach(function(id){
+  var real = B.app.views[id]; if (typeof real !== 'function') return;
+  B.app.views[id] = function(main){
+    if (has(NEEDS[id])) return real.apply(this, arguments);
+    var lvl = NEEDS[id], name = (B.app.VIEWS.filter(function(v){ return v[0] === id; })[0] || [0, 'This page'])[1];
+    main.innerHTML = B.viewHead(name, '') +
+      '<section class="b-panel b3-upsell"><div class="b-panel-body">' +
+        '<div class="b3-upsell-badge">' + TIER[lvl] + ' package</div>' +
+        '<h2>' + U.esc(name) + ' opens with ' + TIER[lvl] + (lvl === 'advanced' ? '' : ' or higher') + '</h2>' +
+        '<p>' + TIER[lvl] + ' is ' + PRICE[lvl] + ' a month and includes your personalised meal plan. Already paid? Link your purchase in My account.</p>' +
+        '<div class="b-row"><button type="button" class="b-btn b-btn-primary" data-up>See the packages</button><button type="button" class="b-btn" data-link>Link a purchase</button></div>' +
+      '</div></section>';
+    main.querySelector('[data-up]').onclick = goPricing;
+    main.querySelector('[data-link]').onclick = function(){ B.app.go ? B.app.go('data') : B.app.open('data'); };
+  };
+});
+// Small lock marker on locked menu items
+var realRender = B.app.render;
+if (typeof realRender === 'function') B.app.render = function(){
+  var r = realRender.apply(this, arguments);
+  try { U.qsa('#b360 [data-view]').forEach(function(b){ var id = b.getAttribute('data-view'); b.classList.toggle('b3-locked', !!NEEDS[id] && !has(NEEDS[id])); }); } catch (e) {}
+  return r;
+};
+
+/* ---------- Templates: server PDFs, paid ones, zip ---------- */
+function saveBlob(blob, name){ var url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); }, 4000); }
+function toast(msg, bad){ if (B.ui && B.ui.toast && document.documentElement.classList.contains('b360-open')) B.ui.toast(msg, bad); else if (typeof window.showToast === 'function') window.showToast(msg, bad); else alert(msg); }
+function fetchFile(path, name){
+  return fetch(path, { credentials:'same-origin' }).then(function(r){
+    if (r.ok) return r.blob().then(function(b){ saveBlob(b, name); return true; });
+    return r.json().catch(function(){ return {}; }).then(function(j){ var e = new Error(j.error || 'Download failed.'); e.status = r.status; throw e; });
+  });
+}
+window.downloadTemplate = function(type){
+  var id = ALIAS[type] || type; var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0] || TEMPLATES[0]; id = t[0];
+  if (t[3] && !A.user) { A.pending = 'data'; B.app.open('data'); toast('Sign in to buy or download this template.'); return; }
+  if (t[3] && !canTemplate(id)) { buyTemplate(id); return; }
+  return fetchFile('/api/templates/' + id + '.pdf', 'Bulamu360_' + t[1].replace(/\s+/g, '_') + '.pdf')
+    .then(function(){ toast(t[1] + ' downloaded.'); })
+    .catch(function(err){ if (err.status === 402) buyTemplate(id); else if (err.status === 401) B.app.open('data'); else toast(err.message, true); });
+};
+A.downloadZip = function(){ return fetchFile('/api/templates/all.zip', 'Bulamu360-Tracking-Templates.zip').then(function(){ toast('All templates downloaded (.zip).'); }).catch(function(err){ toast(err.message, true); }); };
+
+function buyTemplate(id){
+  var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0]; if (!t) return;
+  var u = A.user || {};
+  var d = U.h('div', { class:'b3-buy', role:'dialog', 'aria-modal':'true', 'aria-labelledby':'b3-buy-t' });
+  d.innerHTML = '<form class="b3-buy-card"><button type="button" class="b3-buy-x" data-x aria-label="Close">✕</button>' +
+    '<div class="b3-buy-tag">Printable PDF</div><h3 id="b3-buy-t">' + U.esc(t[1]) + '</h3><p class="b3-buy-price">UGX 7,000 <span>one-off</span></p>' +
+    '<p class="b3-buy-note">Free with Pantry, Banquet or Feast. <a href="#pricing" data-pk>See packages</a></p>' +
+    '<ol class="b3-buy-steps"><li>Send <b>UGX 7,000</b> by <b>MTN MoMo</b> to <b>+256 791 790 934</b> or <b>Airtel Money</b> to <b>+256 704 392 545</b>.</li><li>Enter the transaction reference from the SMS below.</li><li>Breyer approves it and the template unlocks in your account.</li></ol>' +
+    '<label>Phone number<input name="phone" required inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX"></label>' +
+    '<label>Network<select name="network"><option value="MTN MoMo">MTN MoMo</option><option value="Airtel Money">Airtel Money</option></select></label>' +
+    '<label>Transaction reference<input name="txRef" required minlength="6" autocomplete="off" placeholder="From the payment SMS"></label>' +
+    '<div class="b3-buy-err" role="alert" hidden></div>' +
+    '<button type="submit" class="b3-buy-go">Submit payment reference</button></form>';
+  document.body.appendChild(d);
+  var form = d.querySelector('form'), err = d.querySelector('.b3-buy-err');
+  function close(){ d.remove(); }
+  d.querySelector('[data-x]').onclick = close;
+  d.querySelector('[data-pk]').onclick = function(e){ e.preventDefault(); close(); goPricing(); };
+  d.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  setTimeout(function(){ try { form.phone.focus(); } catch (e) {} }, 40);
+  form.onsubmit = function(e){
+    e.preventDefault(); err.hidden = true;
+    var btn = form.querySelector('.b3-buy-go'); btn.disabled = true; btn.textContent = 'Sending…';
+    fetch('/api/orders', { method:'POST', credentials:'same-origin', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ kind:'template', templateId:id, name:u.name, email:u.email, phone:form.phone.value.trim(), network:form.network.value, txRef:form.txRef.value.trim(), profile:{} }) })
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok || !j.ok) throw new Error(j.error || 'Could not send.'); return j; }); })
+      .then(function(){ form.innerHTML = '<div class="b3-buy-done"><div class="b3-buy-tick">✓</div><h3>Reference received</h3><p>Once Breyer approves your payment, <b>' + U.esc(t[1]) + '</b> unlocks in your account and we email you.</p><button type="button" class="b3-buy-go" data-x>Done</button></div>'; form.querySelector('[data-x]').onclick = close; })
+      .catch(function(x){ err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Submit payment reference'; });
+  };
+}
+A.buyTemplate = buyTemplate;
+
+// Price / lock badges on the website's template cards
+function decorateTemplates(){
+  var grid = document.getElementById('templates-grid'); if (!grid) return;
+  U.qsa('.tmpl-card[data-action]', grid).forEach(function(card){
+    var id = ALIAS[card.getAttribute('data-action')] || card.getAttribute('data-action');
+    var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0]; if (!t) return;
+    var pill = card.lastElementChild; if (!pill) return;
+    var open = !t[3] || canTemplate(id);
+    pill.textContent = !t[3] ? '⬇ Download free' : open ? '⬇ Download (included)' : 'UGX 7,000 · free with a package';
+    pill.style.background = open ? 'var(--earth1)' : '#e2674f';
+  });
+  var zipBox = document.getElementById('b3-zip');
+  if (!zipBox) { zipBox = document.createElement('div'); zipBox.id = 'b3-zip'; grid.parentNode.insertBefore(zipBox, grid.nextSibling); }
+  zipBox.innerHTML = plan().templateZip
+    ? '<button type="button" class="b3-zip-btn">⬇ Download every template (.zip)</button>'
+    : '<p class="b3-zip-note">Feast members get every template in one zipped folder.</p>';
+  var zb = zipBox.querySelector('button'); if (zb) zb.onclick = A.downloadZip;
+}
+if (document.readyState === 'complete') setTimeout(decorateTemplates, 300); else window.addEventListener('load', function(){ setTimeout(decorateTemplates, 300); });
+
+/* ---------- My account: package card, link purchase, templates ---------- */
+var acctView = B.app.views.data;
+B.app.views.data = function(main){
+  acctView.apply(this, arguments);
+  if (!A.user) return;
+  var p = plan(), lvl = p.level;
+  var sec = U.h('section', { class:'b-panel b3-plan b3-plan-' + lvl });
+  sec.innerHTML = '<div class="b-panel-body">' +
+    '<div class="b3-plan-top"><div><div class="b3-plan-lbl">Your package</div><div class="b3-plan-name">' + TIER[lvl] + '</div>' +
+    '<div class="b3-plan-sub">' + (lvl === 'free' ? 'Free account' : 'Active until ' + U.esc(p.activeUntil || '') + (p.daysRemaining ? ' · ' + p.daysRemaining + ' days left' : '')) + '</div></div>' +
+    (lvl !== 'advanced' ? '<button type="button" class="b-btn b-btn-primary b-btn-sm" data-up>' + (lvl === 'free' ? 'Choose a package' : 'Upgrade') + '</button>' : '') + '</div>' +
+    '<ul class="b3-plan-list">' +
+      ['Diary, dashboard, foods, biometrics, targets|free', 'Trends, fasting, cycle, 30-day reports, all templates|personal', 'Nutrient analysis, care team, symptom tracker|specialist', 'Assistant, Ask Coach, Meal Analyzer, template .zip|advanced']
+        .map(function(x){ var a = x.split('|'); return '<li class="' + (has(a[1]) ? 'on' : 'off') + '"><span>' + (has(a[1]) ? '✓' : '🔒') + '</span>' + a[0] + ' <em>' + TIER[a[1]] + '</em></li>'; }).join('') +
+    '</ul>' +
+    '<form class="b3-link" data-link><label>Paid already? Link your purchase<input name="code" placeholder="Approval code or payment reference" autocomplete="off"></label><button type="submit" class="b-btn b-btn-sm">Link</button></form>' +
+    '</div>';
+  main.insertBefore(sec, main.children[1] || null);
+  var up = sec.querySelector('[data-up]'); if (up) up.onclick = goPricing;
+  sec.querySelector('[data-link]').onsubmit = function(e){
+    e.preventDefault(); var code = e.target.code.value.trim(); if (!code) return;
+    A.api('link-order', { code:code }).then(function(j){ A.user = j.user; refreshMember(); decorateTemplates(); B.ui.toast('Purchase linked. Your ' + TIER[plan().level] + ' tools are open.'); B.app.render(); }).catch(function(err){ B.ui.toast(err.message, true); });
+  };
+  var tp = U.h('section', { class:'b-panel', style:'margin-top:16px' });
+  tp.innerHTML = '<div class="b-panel-head"><h3>Tracking templates</h3>' + (p.templateZip ? '<button type="button" class="b-btn b-btn-sm b-btn-primary" data-zip>Download all (.zip)</button>' : '') + '</div><div class="b-panel-body b3-tpl-list">' +
+    TEMPLATES.map(function(t){ var ok = canTemplate(t[0]); return '<div class="b3-tpl"><div><b>' + t[1] + '</b><small>' + t[2] + '</small></div><button type="button" class="b-btn b-btn-sm' + (ok ? '' : ' b3-tpl-buy') + '" data-tpl="' + t[0] + '">' + (ok ? 'PDF' : 'UGX 7,000') + '</button></div>'; }).join('') + '</div>';
+  main.appendChild(tp);
+  var z = tp.querySelector('[data-zip]'); if (z) z.onclick = A.downloadZip;
+  U.qsa('[data-tpl]', tp).forEach(function(b){ b.onclick = function(){ window.downloadTemplate(b.getAttribute('data-tpl')); }; });
+  // 30-day report is a Pantry feature
+  U.qsa('[data-rep="30"]', main).forEach(function(b){ if (!has('personal')) { b.textContent = 'Last 30 days (Pantry)'; b.onclick = goPricing; } });
+};
+
+/* ---------- ?signin=1 opens the account sign-in ---------- */
+try { if (/[?&]signin=1/.test(location.search)) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(function(){ B.app.open('diary'); }, 400); } } catch (e) {}
 })();
 
 </script>

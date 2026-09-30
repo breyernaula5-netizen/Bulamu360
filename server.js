@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import net from 'node:net';
 import { lookup as dnsLookup } from 'node:dns/promises';
-import { planPdfFromHtml } from './lib/plan-pdf.js';
+import { planPdfFromHtml, templatePdf, zipFiles, TEMPLATES } from './lib/plan-pdf.js';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dataDir = join(root, 'data');
@@ -439,7 +439,7 @@ function getMemberSession(req) {
 function requireMember(req, res) {
   const session = getMemberSession(req);
   if (session) return session;
-  redirect(res, '/member/login');
+  redirect(res, '/?signin=1');
   return null;
 }
 
@@ -2596,6 +2596,13 @@ function sendPlanPdf(res, order, audience = 'patient') {
 }
 
 async function sendApprovalEmail(order) {
+  if (order.kind === 'template') {
+    return await sendResendEmail({
+      to: order.email,
+      subject: 'Your Bulamu360 template is unlocked',
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#123524"><h2 style="color:#0f3d26">Your template is ready</h2><p>Hello ${escapeHtml(order.name || '')},</p><p>Thank you. <strong>${escapeHtml(order.packageName)}</strong> is now unlocked in your Bulamu360 account.</p><p><a href="${publicBaseUrl}/?signin=1#templates-section" style="background:#17693f;color:#fff;padding:12px 18px;border-radius:999px;text-decoration:none;display:inline-block">Sign in and download (PDF)</a></p></div>`
+    });
+  }
   const attachmentContent = planPdfForOrder(order, 'patient').toString('base64');
   const downloadUrl = `${publicBaseUrl}/plan/${order.downloadToken}/pdf`;
   return await sendResendEmail({
@@ -2892,15 +2899,25 @@ async function handleCreateOrder(req, res) {
       txRefLength: String(payload.txRef || '').replace(/[^A-Z0-9]/gi, '').length,
       hasProfile: Boolean(payload.profile && typeof payload.profile === 'object')
     });
+    const isTemplate = payload.kind === 'template';
+    const tplId = isTemplate ? String(payload.templateId || '') : '';
+    if (isTemplate) {
+      if (!TEMPLATES[tplId] || !TEMPLATES[tplId].premium) return sendJson(res, 400, { ok: false, error: 'That template is not for sale.' });
+      payload.packageName = 'Template - ' + TEMPLATES[tplId].title;
+      payload.amount = 'UGX ' + TEMPLATE_PRICE.toLocaleString('en-US');
+      if (!payload.profile || typeof payload.profile !== 'object') payload.profile = {};
+    }
     const error = validateOrderPayload(payload);
     if (error) {
       logOrderEvent('validation-failed', { error });
       return sendJson(res, 400, { ok: false, error });
     }
     const db = readDb();
+    const buyer = currentAccount(req, db);
+    if (isTemplate && !buyer) return sendJson(res, 401, { ok: false, error: 'Please sign in to your Bulamu360 account to buy a template.' });
     const now = new Date().toISOString();
-    const clinicalSummary = serverClinicalSummaryFromPayload(payload);
-    const privateHtmlPlan = backendPlanHtml(payload, clinicalSummary);
+    const clinicalSummary = isTemplate ? {} : serverClinicalSummaryFromPayload(payload);
+    const privateHtmlPlan = isTemplate ? `<!doctype html><html><body><h1>Template purchase</h1><p>${escapeHtml(payload.packageName)}</p></body></html>` : backendPlanHtml(payload, clinicalSummary);
     const order = {
       id: makeOrderId(),
       status: 'pending',
@@ -2921,6 +2938,9 @@ async function handleCreateOrder(req, res) {
       htmlPlan: privateHtmlPlan,
       htmlHash: createHash('sha256').update(privateHtmlPlan).digest('hex'),
       planEngine: 'backend-private-v1',
+      kind: isTemplate ? 'template' : 'plan',
+      templateId: tplId,
+      accountId: buyer ? buyer.id : '',
       approvalCode: '',
       downloadToken: '',
       followupToken: '',
@@ -3755,13 +3775,17 @@ function memberLoginPage(message = '') {
 
 function memberLevelFromPackage(packageName = '') {
   const name = String(packageName || '').toLowerCase();
+  if (name.startsWith('template')) return 'free';
+  if (name.includes('feast')) return 'advanced';
+  if (name.includes('banquet')) return 'specialist';
+  if (name.includes('pantry')) return 'personal';
   if (name.includes('advanced') || name.includes('program') || name.includes('200')) return 'advanced';
   if (name.includes('specialist') || name.includes('clinical') || name.includes('120')) return 'specialist';
   if (name.includes('personal') || name.includes('household') || name.includes('family') || name.includes('70')) return 'personal';
   return 'free';
 }
 
-const ADVANCED_MEMBER_DAYS = 35;
+const ADVANCED_MEMBER_DAYS = 31; // packages are monthly
 
 function memberDateLabel(value) {
   if (!value) return '';
@@ -3825,13 +3849,20 @@ function memberSubscriptionStatus(order) {
 function memberAccessStatus(req) {
   const session = getMemberSession(req);
   if (!session) {
+    const adb = readDb(), acct = currentAccount(req, adb);
+    if (acct) {
+      const p = accountPlan(adb, acct);
+      return { ok: true, loggedIn: true, active: p.level !== 'free', email: acct.email, name: acct.name, level: p.level, tier: p.tier, packageName: p.packageName,
+        statusLabel: p.level !== 'free' ? 'Active' : 'Free account', detail: p.level !== 'free' ? `${p.tier} package is active until ${p.activeUntil}.` : 'Choose Pantry, Banquet or Feast to unlock more tools.',
+        activeUntil: p.activeUntil, daysRemaining: p.daysRemaining, renewalReminder: '', renewalDue: false, templates: p.templates, allTemplates: p.allTemplates, templateZip: p.templateZip };
+    }
     return {
       ok: true,
       loggedIn: false,
       active: false,
       level: 'free',
       statusLabel: 'Not logged in',
-      detail: 'Log in to your member portal to unlock paid tools.'
+      detail: 'Sign in to your Bulamu360 account to unlock paid tools.'
     };
   }
   const db = readDb();
@@ -5021,7 +5052,7 @@ async function handleApprove(req, res, id) {
   const db = readDb();
   const order = findOrder(db, id);
   if (!order) return sendHtml(res, 404, 'Order not found');
-  if (!(order.adminReview && order.adminReview.checklistComplete)) return redirect(res, `/admin/orders/${encodeURIComponent(id)}/review`);
+  if (order.kind !== 'template' && !(order.adminReview && order.adminReview.checklistComplete)) return redirect(res, `/admin/orders/${encodeURIComponent(id)}/review`);
   auditAdminAction(db, req, 'order-approve', { orderId: order.id, customer: order.email });
   approveOrder(db, order, form);
   redirect(res, '/admin?status=pending');
@@ -5931,7 +5962,47 @@ function accountCookie(token, maxAgeSec) {
   const secure = isProduction ? '; Secure' : '';
   return `${ACCOUNT_COOKIE}=${encodeURIComponent(token || '')}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSec}${secure}`;
 }
-function publicUser(u) { return { id: u.id, name: u.name, email: u.email, newsletter: Boolean(u.newsletter), createdAt: u.createdAt, trackerSavedAt: u.tracker ? u.tracker.savedAt : null }; }
+function publicUser(u, db) { return { id: u.id, name: u.name, email: u.email, newsletter: Boolean(u.newsletter), createdAt: u.createdAt, trackerSavedAt: u.tracker ? u.tracker.savedAt : null, plan: db ? accountPlan(db, u) : undefined }; }
+/* B360 PACKAGES */
+const TEMPLATE_PRICE = 7000;
+const TIER_NAME = { free: 'Free', personal: 'Pantry', specialist: 'Banquet', advanced: 'Feast' };
+const TIER_RANK = { free: 0, personal: 1, specialist: 2, advanced: 3 };
+function accountOrders(db, user) {
+  const linked = new Set(Array.isArray(user.linkedOrders) ? user.linkedOrders : []);
+  return (db.orders || []).filter(o => o && o.status === 'approved' && ((o.accountId && o.accountId === user.id) || linked.has(o.id)));
+}
+function accountPlan(db, user) {
+  const orders = accountOrders(db, user);
+  let best = null;
+  for (const o of orders) {
+    if (o.kind === 'template') continue;
+    const level = memberLevelFromPackage(o.packageName), cyc = memberCycleInfo(o);
+    if (level === 'free' || !cyc.active) continue;
+    if (!best || TIER_RANK[level] > TIER_RANK[best.level] || (TIER_RANK[level] === TIER_RANK[best.level] && cyc.expiresAt > best.expiresAt)) best = { level, packageName: o.packageName, activeUntil: cyc.activeUntil, expiresAt: cyc.expiresAt, daysRemaining: cyc.daysRemaining };
+  }
+  const level = best ? best.level : 'free';
+  const templates = [...new Set(orders.filter(o => o.kind === 'template' && o.templateId).map(o => o.templateId))];
+  return { level, tier: TIER_NAME[level], packageName: best ? best.packageName : '', activeUntil: best ? best.activeUntil : '', daysRemaining: best ? best.daysRemaining : 0, templates, allTemplates: level !== 'free', templateZip: level === 'advanced' };
+}
+function canDownloadTemplate(plan, id) { const t = TEMPLATES[id]; return !!t && (!t.premium || plan.allTemplates || plan.templates.includes(id)); }
+async function handleTemplateRoutes(req, res, url) {
+  const m = url.pathname.match(/^\/api\/templates\/([A-Za-z]+)\.(pdf|zip)$/);
+  if (!m || req.method !== 'GET') return false;
+  const db = readDb(), user = currentAccount(req, db);
+  const plan = user ? accountPlan(db, user) : { level: 'free', templates: [], allTemplates: false, templateZip: false };
+  const logoPath = join(root, 'bulamu360-logo.png');
+  if (m[1] === 'all' && m[2] === 'zip') {
+    if (!plan.templateZip) { sendJson(res, 403, { ok: false, error: 'The full template pack comes with the Feast package.' }); return true; }
+    const zip = zipFiles(Object.keys(TEMPLATES).map(id => ({ name: 'Bulamu360 Tracking Templates/Bulamu360_' + TEMPLATES[id].file + '.pdf', data: templatePdf(id, { logoPath }) })));
+    res.writeHead(200, securityHeaders({ 'Content-Type': 'application/zip', 'Content-Length': zip.length, 'Content-Disposition': 'attachment; filename="Bulamu360-Tracking-Templates.zip"', 'Cache-Control': 'no-store' }));
+    res.end(zip); return true;
+  }
+  if (m[2] !== 'pdf' || !TEMPLATES[m[1]]) { sendJson(res, 404, { ok: false, error: 'Template not found.' }); return true; }
+  if (!canDownloadTemplate(plan, m[1])) { sendJson(res, user ? 402 : 401, { ok: false, error: user ? 'This template costs UGX 7,000, or comes free with any package.' : 'Please sign in to download this template.' }); return true; }
+  const pdf = templatePdf(m[1], { logoPath });
+  res.writeHead(200, securityHeaders({ 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `attachment; filename="Bulamu360_${TEMPLATES[m[1]].file}.pdf"`, 'Cache-Control': 'no-store' }));
+  res.end(pdf); return true;
+}
 function currentAccount(req, db) {
   const tok = getCookie(req, ACCOUNT_COOKIE);
   if (!tok) return null;
@@ -5983,7 +6054,7 @@ async function handleAccountApi(req, res, url) {
     const cookie = startAccountSession(res, db, user);
     trackerAudit(db, 'account-created', '', email.replace(/(^.).*(@.*$)/, '$1***$2'));
     writeDb(db);
-    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user, db) }, cookie);
   }
   if (route === 'login') {
     const email = String(body.email || '').trim().toLowerCase();
@@ -5994,7 +6065,7 @@ async function handleAccountApi(req, res, url) {
     const cookie = startAccountSession(res, db, user);
     user.lastLoginAt = new Date().toISOString();
     writeDb(db);
-    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user, db) }, cookie);
   }
   if (route === 'forgot') {
     const email = String(body.email || '').trim().toLowerCase();
@@ -6029,7 +6100,7 @@ async function handleAccountApi(req, res, url) {
     for (const [h, s] of Object.entries(a.sessions)) if (s.uid === user.id) delete a.sessions[h];
     const cookie = startAccountSession(res, db, user);
     writeDb(db);
-    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user, db) }, cookie);
   }
   if (route === 'logout') {
     const tok = getCookie(req, ACCOUNT_COOKIE);
@@ -6038,7 +6109,7 @@ async function handleAccountApi(req, res, url) {
   }
   const user = currentAccount(req, db);
   if (!user) return sendJson(res, 401, { ok: false, error: 'Please sign in.' });
-  if (route === 'me') return sendJson(res, 200, { ok: true, user: publicUser(user) });
+  if (route === 'me') return sendJson(res, 200, { ok: true, user: publicUser(user, db) });
   if (route === 'tracker') return sendJson(res, 200, { ok: true, data: user.tracker ? user.tracker.data : null, savedAt: user.tracker ? user.tracker.savedAt : null });
   if (route === 'tracker/save') {
     const raw = JSON.stringify(body.data || null);
@@ -6047,11 +6118,20 @@ async function handleAccountApi(req, res, url) {
     writeDb(db);
     return sendJson(res, 200, { ok: true, savedAt: user.tracker.savedAt });
   }
+  if (route === 'link-order') {
+    const code = String(body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 5) return sendJson(res, 400, { ok: false, error: 'Enter the approval code or payment reference from your purchase.' });
+    const order = (db.orders || []).find(o => o.status === 'approved' && String(o.email || '').toLowerCase() === user.email && (String(o.approvalCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === code || String(o.txRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === code));
+    if (!order) return sendJson(res, 404, { ok: false, error: 'We could not find an approved purchase with that code for ' + user.email + '.' });
+    user.linkedOrders = [...new Set([...(user.linkedOrders || []), order.id])];
+    writeDb(db);
+    return sendJson(res, 200, { ok: true, user: publicUser(user, db) });
+  }
   if (route === 'newsletter') {
     user.newsletter = Boolean(body.subscribe);
     user.newsletterAt = new Date().toISOString();
     writeDb(db);
-    return sendJson(res, 200, { ok: true, user: publicUser(user) });
+    return sendJson(res, 200, { ok: true, user: publicUser(user, db) });
   }
   return sendJson(res, 404, { ok: false, error: 'Unknown account action.' });
 }
@@ -6098,12 +6178,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/recipe-pool') return handleRecipePool(req, res);
     if (await handleTrackerPublicRoutes(req, res, url)) return;
     if (await handleAccountRoutes(req, res, url)) return;
-    if (req.method === 'GET' && url.pathname === '/member/login') return sendHtml(res, 200, memberLoginPage());
+    if (await handleTemplateRoutes(req, res, url)) return;
+    if (req.method === 'GET' && (url.pathname === '/member/login' || url.pathname === '/member')) { res.writeHead(302, securityHeaders({ Location: '/?signin=1' })); return res.end(); }
     if (req.method === 'POST' && url.pathname === '/member/login') return handleMemberLogin(req, res);
     if (req.method === 'GET' && url.pathname === '/member/logout') {
       const sid = getCookie(req, 'bulamu_member');
       if (sid) sessions.delete(`member:${sid}`);
-      res.writeHead(302, securityHeaders({ Location: '/member/login', 'Set-Cookie': memberSessionCookie('', 0) }));
+      res.writeHead(302, securityHeaders({ Location: '/', 'Set-Cookie': memberSessionCookie('', 0) }));
       return res.end();
     }
     if (req.method === 'GET' && url.pathname === '/member') {
