@@ -5,6 +5,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import net from 'node:net';
+import { lookup as dnsLookup } from 'node:dns/promises';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dataDir = join(root, 'data');
@@ -76,7 +78,8 @@ function securityHeaders(extra = {}) {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    // camera/microphone allowed for this site only: barcode scanning and voice food logging in the tracker.
+    'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
     'Cache-Control': 'no-store',
     ...extra
   };
@@ -2260,6 +2263,613 @@ async function serveStatic(req, res) {
   }
 }
 
+/* =====================================================================
+   BULAMU360 TRACKER - additive server module
+   - Client sharing API (auth = existing approved-order approval code + email)
+   - Secure practitioner <-> client messaging
+   - Practitioner dashboard (/admin/clients, /admin/groups) behind existing admin auth
+   - USDA FoodData Central proxy (optional FDC_API_KEY) and recipe URL import
+   Data lives in db.tracker; existing db.orders is only read, never modified.
+===================================================================== */
+const TRACKER_SESSION_DAYS = 90;
+const TRACKER_MAX_SNAPSHOT = 400_000;
+const fdcApiKey = process.env.FDC_API_KEY || 'DEMO_KEY';
+const fdcCache = new Map();
+
+function trackerState(db) {
+  if (!db.tracker || typeof db.tracker !== 'object') db.tracker = {};
+  const t = db.tracker;
+  if (!t.sessions || typeof t.sessions !== 'object') t.sessions = {};
+  if (!t.clients || typeof t.clients !== 'object') t.clients = {};
+  if (!t.messages || typeof t.messages !== 'object') t.messages = {};
+  if (!t.groups || typeof t.groups !== 'object') t.groups = {};
+  if (!t.templates || typeof t.templates !== 'object') t.templates = {};
+  if (!Array.isArray(t.audit)) t.audit = [];
+  return t;
+}
+function trackerAudit(db, action, orderId, detail = '') {
+  const t = trackerState(db);
+  t.audit.unshift({ at: new Date().toISOString(), action, orderId: orderId || '', detail: shortText(detail, 200) });
+  if (t.audit.length > 1000) t.audit.length = 1000;
+}
+function hashToken(token) { return createHash('sha256').update(String(token)).digest('hex'); }
+function trackerClientFromToken(db, token) {
+  const t = trackerState(db);
+  const s = token && t.sessions[hashToken(token)];
+  if (!s || s.expiresAt < Date.now()) return null;
+  const order = db.orders.find(o => o.id === s.orderId && o.status === 'approved');
+  return order ? { order, session: s } : null;
+}
+/* Deep-sanitise client JSON: finite numbers, short strings, bounded arrays/depth. */
+function sanitiseSnapshot(value, depth = 0) {
+  if (depth > 7) return null;
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') return value.slice(0, 200);
+  if (Array.isArray(value)) return value.slice(0, 4000).map(v => sanitiseSnapshot(v, depth + 1));
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value).slice(0, 200)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      out[String(k).slice(0, 60)] = sanitiseSnapshot(v, depth + 1);
+    }
+    return out;
+  }
+  return null;
+}
+function clientRecord(db, orderId) {
+  const t = trackerState(db);
+  if (!t.clients[orderId]) t.clients[orderId] = { orderId, groups: [], assigned: null, snapshot: null, sharedAt: null };
+  return t.clients[orderId];
+}
+function clientMessages(db, orderId) {
+  const t = trackerState(db);
+  if (!Array.isArray(t.messages[orderId])) t.messages[orderId] = [];
+  return t.messages[orderId];
+}
+function publicMessages(list) {
+  return list.slice(-200).map(m => ({ id: m.id, from: m.from, body: m.body, at: m.at, readByPractitioner: Boolean(m.readByPractitioner), readByClient: Boolean(m.readByClient) }));
+}
+function unreadForClient(db, orderId) { return clientMessages(db, orderId).filter(m => m.from === 'practitioner' && !m.readByClient).length; }
+function unreadForPractitioner(db, orderId) { return clientMessages(db, orderId).filter(m => m.from === 'client' && !m.readByPractitioner).length; }
+
+async function handleTrackerApi(req, res, url) {
+  const route = url.pathname.replace('/api/tracker/', '');
+  const payload = await readRequestJson(req).catch(() => null);
+  if (!payload || typeof payload !== 'object') return sendJson(res, 400, { ok: false, error: 'Invalid request.' });
+  const db = readDb();
+  const t = trackerState(db);
+  if (route === 'session') {
+    const code = String(payload.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const email = String(payload.email || '').trim().toLowerCase();
+    if (!code || !email) return sendJson(res, 400, { ok: false, error: 'Enter your approval code and the email used on your order.' });
+    const order = db.orders.find(o => o.status === 'approved' && String(o.approvalCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === code);
+    if (!order || String(order.email || '').toLowerCase() !== email) {
+      return sendJson(res, 404, { ok: false, error: 'No approved plan matches that approval code and email.' });
+    }
+    const token = randomBytes(32).toString('hex');
+    const now = Date.now();
+    for (const [h, s] of Object.entries(t.sessions)) if (s.expiresAt < now) delete t.sessions[h];
+    const mine = Object.entries(t.sessions).filter(([, s]) => s.orderId === order.id).sort((a, b) => a[1].createdAt - b[1].createdAt);
+    while (mine.length >= 5) delete t.sessions[mine.shift()[0]];
+    t.sessions[hashToken(token)] = { orderId: order.id, createdAt: now, expiresAt: now + TRACKER_SESSION_DAYS * 864e5 };
+    clientRecord(db, order.id);
+    trackerAudit(db, 'client-signin', order.id);
+    writeDb(db);
+    return sendJson(res, 200, { ok: true, token, expiresAt: new Date(now + TRACKER_SESSION_DAYS * 864e5).toISOString(), client: { id: order.id, name: order.name, packageName: order.packageName } });
+  }
+  const auth = trackerClientFromToken(db, payload.token);
+  if (!auth) return sendJson(res, 401, { ok: false, error: 'Session expired. Please sign in again.' });
+  const orderId = auth.order.id;
+  const rec = clientRecord(db, orderId);
+  if (route === 'signout') {
+    delete t.sessions[hashToken(payload.token)];
+    trackerAudit(db, 'client-signout', orderId);
+    writeDb(db);
+    return sendJson(res, 200, { ok: true });
+  }
+  if (route === 'status') return sendJson(res, 200, { ok: true, unread: unreadForClient(db, orderId), assigned: rec.assigned || null });
+  if (route === 'sync') {
+    const raw = JSON.stringify(payload.snapshot || null);
+    if (!payload.snapshot || raw.length > TRACKER_MAX_SNAPSHOT) return sendJson(res, 413, { ok: false, error: 'Shared data is missing or too large.' });
+    rec.snapshot = sanitiseSnapshot(payload.snapshot);
+    rec.sharedAt = new Date().toISOString();
+    trackerAudit(db, 'client-shared', orderId, `${raw.length} bytes`);
+    writeDb(db);
+    return sendJson(res, 200, { ok: true, sharedAt: rec.sharedAt, assigned: rec.assigned || null, unread: unreadForClient(db, orderId) });
+  }
+  if (route === 'messages') {
+    const list = clientMessages(db, orderId);
+    let changed = false;
+    for (const m of list) if (m.from === 'practitioner' && !m.readByClient) { m.readByClient = new Date().toISOString(); changed = true; }
+    if (changed) writeDb(db);
+    return sendJson(res, 200, { ok: true, messages: publicMessages(list), assigned: rec.assigned || null, unread: 0 });
+  }
+  if (route === 'message') {
+    const body = String(payload.body || '').trim().slice(0, 2000);
+    if (!body) return sendJson(res, 400, { ok: false, error: 'Message is empty.' });
+    const list = clientMessages(db, orderId);
+    const recent = list.filter(m => m.from === 'client' && Date.now() - Date.parse(m.at) < 60_000).length;
+    if (recent >= 5) return sendJson(res, 429, { ok: false, error: 'Please wait a minute before sending more messages.' });
+    list.push({ id: randomUUID(), from: 'client', body, at: new Date().toISOString(), readByPractitioner: false, readByClient: true });
+    if (list.length > 500) list.splice(0, list.length - 500);
+    trackerAudit(db, 'client-message', orderId);
+    writeDb(db);
+    if (ownerEmail) {
+      // Notification only; the message content stays in the dashboard.
+      sendResendEmail({ to: ownerEmail, subject: `New Bulamu360 tracker message - ${auth.order.name}`, html: `<p>${escapeHtml(auth.order.name)} sent you a message in the Bulamu360 tracker.</p><p><a href="${publicBaseUrl}/admin/clients/${encodeURIComponent(orderId)}">Open the client in the practitioner dashboard</a></p>` }).catch(err => console.error('Tracker message email failed:', err.message));
+    }
+    return sendJson(res, 200, { ok: true, messages: publicMessages(list) });
+  }
+  return sendJson(res, 404, { ok: false, error: 'Unknown tracker action.' });
+}
+
+/* ---------- USDA FoodData Central proxy (keeps the key server-side, caches results) ---------- */
+async function fdcFetch(path, params) {
+  const qs = new URLSearchParams({ ...params, api_key: fdcApiKey });
+  const key = path + '?' + new URLSearchParams(params).toString();
+  const hit = fdcCache.get(key);
+  if (hit && Date.now() - hit.at < 24 * 3600_000) return hit.data;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12_000);
+  try {
+    const r = await fetch(`https://api.nal.usda.gov/fdc/v1/${path}?${qs}`, { signal: ctrl.signal });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(r.status === 429 ? 'USDA lookup limit reached; try again later.' : `USDA lookup failed (${r.status}).`); e.status = r.status === 429 ? 429 : 502; throw e; }
+    fdcCache.set(key, { at: Date.now(), data });
+    if (fdcCache.size > 600) fdcCache.delete(fdcCache.keys().next().value);
+    return data;
+  } finally { clearTimeout(timer); }
+}
+function slimFdcFood(f) {
+  return {
+    fdcId: f.fdcId, description: f.description, dataType: f.dataType, brandOwner: f.brandOwner, brandName: f.brandName,
+    foodCategory: typeof f.foodCategory === 'object' && f.foodCategory ? f.foodCategory.description : f.foodCategory,
+    gtinUpc: f.gtinUpc, ingredients: f.ingredients, servingSize: f.servingSize, servingSizeUnit: f.servingSizeUnit, householdServingFullText: f.householdServingFullText,
+    foodMeasures: (f.foodMeasures || []).slice(0, 10).map(m => ({ disseminationText: m.disseminationText, gramWeight: m.gramWeight })),
+    foodPortions: (f.foodPortions || []).slice(0, 10).map(m => ({ amount: m.amount, modifier: m.modifier, portionDescription: m.portionDescription, gramWeight: m.gramWeight, measureUnit: m.measureUnit ? { name: m.measureUnit.name } : undefined })),
+    foodNutrients: (f.foodNutrients || []).map(n => ({ nutrientNumber: n.nutrientNumber || (n.nutrient && n.nutrient.number), value: n.value != null ? n.value : n.amount })).filter(n => n.nutrientNumber && n.value != null)
+  };
+}
+async function handleFoodsProxy(req, res, url) {
+  try {
+    if (url.pathname === '/api/foods/search') {
+      const q = String(url.searchParams.get('q') || '').trim().slice(0, 80);
+      const page = Math.max(1, Math.min(50, Number(url.searchParams.get('page')) || 1));
+      if (q.length < 2) return sendJson(res, 400, { ok: false, error: 'Search needs at least 2 characters.' });
+      const data = await fdcFetch('foods/search', { query: q, pageSize: '25', pageNumber: String(page), dataType: 'Foundation,SR Legacy,Survey (FNDDS),Branded' });
+      return sendJson(res, 200, { ok: true, totalHits: data.totalHits || 0, totalPages: data.totalPages || 1, foods: (data.foods || []).map(slimFdcFood) });
+    }
+    const m = url.pathname.match(/^\/api\/foods\/fdc\/(\d{1,10})$/);
+    if (m) return sendJson(res, 200, slimFdcFood(await fdcFetch(`food/${m[1]}`, {})));
+    return sendJson(res, 404, { ok: false, error: 'Not found' });
+  } catch (error) {
+    return sendJson(res, error.status || 502, { ok: false, error: error.name === 'AbortError' ? 'USDA lookup timed out.' : error.message });
+  }
+}
+
+/* ---------- Recipe URL import (schema.org Recipe JSON-LD) with SSRF protection ---------- */
+function isPrivateAddress(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  const v = ip.toLowerCase();
+  if (v.startsWith('::ffff:')) return isPrivateAddress(v.slice(7));
+  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80');
+}
+async function assertPublicUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { throw Object.assign(new Error('That is not a valid web address.'), { status: 400 }); }
+  if (!['http:', 'https:'].includes(u.protocol)) throw Object.assign(new Error('Only http and https addresses are supported.'), { status: 400 });
+  if (u.username || u.password) throw Object.assign(new Error('Addresses with credentials are not allowed.'), { status: 400 });
+  if (u.port && !['80', '443'].includes(u.port)) throw Object.assign(new Error('That port is not allowed.'), { status: 400 });
+  const addrs = await dnsLookup(u.hostname, { all: true }).catch(() => []);
+  if (!addrs.length) throw Object.assign(new Error('That website could not be found.'), { status: 400 });
+  if (addrs.some(a => isPrivateAddress(a.address))) throw Object.assign(new Error('That address is not allowed.'), { status: 400 });
+  return u;
+}
+function decodeEntities(s) {
+  return String(s || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/\s+/g, ' ').trim();
+}
+function findRecipeNode(node, depth = 0) {
+  if (!node || depth > 6) return null;
+  if (Array.isArray(node)) { for (const n of node) { const r = findRecipeNode(n, depth + 1); if (r) return r; } return null; }
+  if (typeof node !== 'object') return null;
+  const type = node['@type'];
+  if (type === 'Recipe' || (Array.isArray(type) && type.includes('Recipe'))) return node;
+  if (node['@graph']) return findRecipeNode(node['@graph'], depth + 1);
+  if (node.mainEntity) return findRecipeNode(node.mainEntity, depth + 1);
+  return null;
+}
+async function handleRecipeImport(req, res) {
+  try {
+    const payload = await readRequestJson(req);
+    let target = await assertPublicUrl(String(payload.url || '').trim());
+    let response;
+    for (let hop = 0; hop < 4; hop++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      response = await fetch(target, { redirect: 'manual', signal: ctrl.signal, headers: { 'User-Agent': 'Bulamu360-RecipeImport/1.0', Accept: 'text/html,application/xhtml+xml' } }).finally(() => clearTimeout(timer));
+      if (response.status >= 300 && response.status < 400 && response.headers.get('location')) { target = await assertPublicUrl(new URL(response.headers.get('location'), target).toString()); continue; }
+      break;
+    }
+    if (!response.ok) return sendJson(res, 502, { ok: false, error: `The website responded with ${response.status}.` });
+    const reader = response.body.getReader();
+    let html = '', size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > 3_000_000) { reader.cancel(); break; }
+      html += Buffer.from(value).toString('utf8');
+    }
+    let recipe = null;
+    for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try { recipe = findRecipeNode(JSON.parse(m[1].trim())); } catch { recipe = null; }
+      if (recipe) break;
+    }
+    if (!recipe) return sendJson(res, 422, { ok: false, error: 'No structured recipe data was found on that page.' });
+    const yieldRaw = Array.isArray(recipe.recipeYield) ? recipe.recipeYield[0] : recipe.recipeYield;
+    const servings = Math.max(1, Math.min(100, parseInt(String(yieldRaw || '').match(/\d+/)?.[0] || '4', 10)));
+    const ingredients = (Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : Array.isArray(recipe.ingredients) ? recipe.ingredients : []).slice(0, 80).map(decodeEntities).filter(Boolean).map(s => s.slice(0, 200));
+    const nutrition = recipe.nutrition && typeof recipe.nutrition === 'object'
+      ? Object.fromEntries(Object.entries(recipe.nutrition).filter(([k, v]) => k !== '@type' && typeof v === 'string').slice(0, 20).map(([k, v]) => [k.slice(0, 40), decodeEntities(v).slice(0, 40)]))
+      : null;
+    return sendJson(res, 200, { ok: true, name: decodeEntities(recipe.name).slice(0, 120), servings, ingredients, nutrition, source: target.toString() });
+  } catch (error) {
+    return sendJson(res, error.status || 502, { ok: false, error: error.name === 'AbortError' ? 'The website took too long to respond.' : (error.message || 'Import failed.') });
+  }
+}
+
+/* Public route dispatcher. Returns true when the request was handled. */
+async function handleTrackerPublicRoutes(req, res, url) {
+  const p = url.pathname;
+  if (req.method === 'GET' && p === '/tracker') { redirect(res, '/app#tracker'); return true; }
+  if (req.method === 'GET' && p.startsWith('/api/foods/')) {
+    if (!rateLimit(req, res, 'foods', { limit: 60, windowMs: 60_000 })) return true;
+    await handleFoodsProxy(req, res, url); return true;
+  }
+  if (req.method === 'POST' && p === '/api/recipe-import') {
+    if (!rateLimit(req, res, 'recipe-import', { limit: 10, windowMs: 60_000 })) return true;
+    await handleRecipeImport(req, res); return true;
+  }
+  if (req.method === 'POST' && p.startsWith('/api/tracker/')) {
+    const name = p.endsWith('/session') ? 'tracker-session' : 'tracker';
+    if (!rateLimit(req, res, name, { limit: name === 'tracker-session' ? 10 : 120, windowMs: 60_000 })) return true;
+    await handleTrackerApi(req, res, url); return true;
+  }
+  return false;
+}
+
+/* ---------- Practitioner dashboard (admin-only; requireAdmin has already run) ---------- */
+function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+function fmt0(v, d = 0) { return v == null || !Number.isFinite(v) ? '–' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: 0 }); }
+function dayKeyAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+function clientSummary(db, order) {
+  const t = trackerState(db);
+  const rec = t.clients[order.id] || { groups: [] };
+  const snap = rec.snapshot || {};
+  const days = Array.isArray(snap.days) ? snap.days : [];
+  const since14 = dayKeyAgo(13);
+  const recent = days.filter(d => d && d.date >= since14);
+  const target = num(snap.targets && snap.targets.energy);
+  const assignedEnergy = num(rec.assigned && rec.assigned.energy);
+  const goal = assignedEnergy || target;
+  const within = goal ? recent.filter(d => num(d.energy) != null && Math.abs(d.energy - goal) / goal <= 0.1).length : null;
+  const weights = (Array.isArray(snap.biometrics) ? snap.biometrics : []).filter(b => b && b.metric === 'weight' && num(b.value) != null).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const w30 = weights.filter(w => w.date >= dayKeyAgo(30));
+  return {
+    order, rec, snap, days, recent, loggedDays14: recent.length,
+    avgKcal14: recent.length ? recent.reduce((s, d) => s + (num(d.energy) || 0), 0) / recent.length : null,
+    goal, compliance: goal && recent.length ? within / recent.length : null,
+    latestWeight: weights.length ? weights[weights.length - 1] : null,
+    weightChange30: w30.length >= 2 ? w30[w30.length - 1].value - w30[0].value : null,
+    unread: unreadForPractitioner(db, order.id),
+    groups: (rec.groups || []).filter(g => t.groups[g])
+  };
+}
+function trackerClientOrders(db) {
+  const t = trackerState(db);
+  const ids = new Set([...Object.keys(t.clients), ...Object.keys(t.messages)]);
+  return db.orders.filter(o => ids.has(o.id));
+}
+function trackerAdminShell(title, body, active = 'clients') {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Bulamu360</title>
+<style>
+:root{--forest:#163d2a;--em:#1d7349;--sage:#edf3ee;--line:#dde1da;--ink:#1c2420;--muted:#5f6a64;--bg:#f5f6f3;--warn:#a8671a;--over:#a9492f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,'Segoe UI',Roboto,Arial,sans-serif}
+a{color:var(--em)}.wrap{max-width:1320px;margin:0 auto;padding:24px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}.top h1{margin:0;font-size:24px;color:var(--forest)}.top p{margin:4px 0 0;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}.tabs a{padding:7px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;text-decoration:none;color:var(--ink);font-weight:600;font-size:13px}.tabs a.on{background:var(--sage);border-color:var(--em);color:var(--forest)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line)}.pad{padding:14px 16px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:#f0f2ee}.r{text-align:right}
+.scroll{overflow:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{display:inline-block;border:1px solid var(--em);background:var(--em);color:#fff;padding:7px 12px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;cursor:pointer}.ghost{background:#fff;color:var(--forest);border-color:var(--line)}.danger{background:#fff;color:var(--over);border-color:var(--over)}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid #c9cfc6;border-radius:6px;background:#fff;max-width:100%}textarea{width:100%;min-height:80px}
+label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:8px}label input,label select{display:block;margin-top:3px;width:100%}
+.badge{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;background:#e6e9e3;color:var(--muted)}.ok{background:#d9e6dc;color:var(--forest)}.warn{background:#f8eedf;color:var(--warn)}.over{background:#f7e6e0;color:var(--over)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid var(--line)}.kpi{padding:10px 14px;border-right:1px solid var(--line)}.kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}.kpi b{font-size:20px}
+.msg{max-width:78%;margin:8px 0;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}.msg.me{margin-left:auto;background:var(--sage)}.msg small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.note{font-size:12px;color:var(--muted)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+@media print{.tabs,.noprint{display:none!important}body{background:#fff}.panel{break-inside:avoid;border-color:#ccc}}
+</style></head><body><div class="wrap">
+<nav class="tabs noprint" aria-label="Admin navigation"><a href="/admin">Orders</a><a href="/admin/followups">Follow-ups</a><a href="/admin/clients" class="${active === 'clients' ? 'on' : ''}">Tracker clients</a><a href="/admin/groups" class="${active === 'groups' ? 'on' : ''}">Groups &amp; templates</a><a href="/admin/logout">Log out</a></nav>
+${body}</div></body></html>`;
+}
+function adminClientsPage(db, url) {
+  const t = trackerState(db);
+  const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+  const group = String(url.searchParams.get('group') || '');
+  const unreadOnly = url.searchParams.get('unread') === '1';
+  let rows = trackerClientOrders(db).map(o => clientSummary(db, o));
+  if (q) rows = rows.filter(r => `${r.order.name} ${r.order.email} ${r.order.phone}`.toLowerCase().includes(q));
+  if (group) rows = rows.filter(r => r.groups.includes(group));
+  if (unreadOnly) rows = rows.filter(r => r.unread);
+  rows.sort((a, b) => (b.unread - a.unread) || String(b.rec.sharedAt || '').localeCompare(String(a.rec.sharedAt || '')));
+  const groupOpts = Object.entries(t.groups).map(([id, g]) => `<option value="${escapeHtml(id)}"${id === group ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
+  const tplOpts = Object.entries(t.templates).map(([id, tp]) => `<option value="${escapeHtml(id)}">${escapeHtml(tp.name)}</option>`).join('');
+  const tr = rows.map(r => `<tr>
+    <td><input type="checkbox" name="ids" value="${escapeHtml(r.order.id)}" form="batch" aria-label="Select ${escapeHtml(r.order.name)}"></td>
+    <td><a href="/admin/clients/${encodeURIComponent(r.order.id)}"><b>${escapeHtml(r.order.name)}</b></a><br><span class="note">${escapeHtml(r.order.email)} · ${escapeHtml(r.order.packageName || '')}</span></td>
+    <td>${r.rec.sharedAt ? escapeHtml(new Date(r.rec.sharedAt).toLocaleString()) : '<span class="note">Not shared yet</span>'}</td>
+    <td class="r">${r.loggedDays14}/14</td>
+    <td class="r">${fmt0(r.avgKcal14)}${r.goal ? ` / ${fmt0(r.goal)}` : ''}</td>
+    <td class="r">${r.compliance == null ? '–' : `<span class="badge ${r.compliance >= 0.7 ? 'ok' : r.compliance >= 0.4 ? 'warn' : 'over'}">${Math.round(r.compliance * 100)}%</span>`}</td>
+    <td class="r">${r.latestWeight ? `${fmt0(r.latestWeight.value, 1)} kg` : '–'}${r.weightChange30 != null ? `<br><span class="note">${r.weightChange30 >= 0 ? '+' : ''}${fmt0(r.weightChange30, 1)} kg / 30 d</span>` : ''}</td>
+    <td>${r.groups.map(g => `<span class="badge">${escapeHtml(t.groups[g].name)}</span>`).join(' ')}</td>
+    <td class="r">${r.unread ? `<span class="badge warn">${r.unread} new</span>` : ''}</td></tr>`).join('');
+  return trackerAdminShell('Tracker clients', `
+  <div class="top"><div><h1>Tracker clients</h1><p>Clients who connected the Bulamu360 tracker with their approval code. Only data each client chose to share is shown.</p></div>
+  <div class="row noprint"><a class="btn ghost" href="/admin/clients.csv">Export CSV</a></div></div>
+  <form class="panel pad row noprint" method="get" action="/admin/clients" role="search">
+    <label style="flex:1;min-width:200px">Search<input name="q" value="${escapeHtml(q)}" placeholder="Name, email or phone"></label>
+    <label>Group<select name="group"><option value="">All groups</option>${groupOpts}</select></label>
+    <label style="display:flex;gap:6px;align-items:center;margin-bottom:14px"><input type="checkbox" name="unread" value="1" style="width:auto"${unreadOnly ? ' checked' : ''}> Unread only</label>
+    <button class="btn" style="margin-bottom:8px">Filter</button></form>
+  <div class="panel"><div class="scroll"><table><thead><tr><th></th><th>Client</th><th>Last shared</th><th class="r">Logged (14 d)</th><th class="r">Avg kcal / target</th><th class="r">Energy compliance</th><th class="r">Weight</th><th>Groups</th><th class="r">Messages</th></tr></thead>
+  <tbody>${tr || '<tr><td colspan="9" class="note" style="padding:20px">No tracker clients yet. Clients connect from the tracker’s Care team section using their approval code and email.</td></tr>'}</tbody></table></div></div>
+  <form id="batch" class="panel pad noprint" method="post" action="/admin/clients/batch"><h2 style="padding:0 0 10px;border:0">Batch actions for selected clients</h2>
+    <div class="row">
+      <label>Action<select name="action"><option value="group">Add to group</option><option value="ungroup">Remove from group</option><option value="targets">Assign target template</option><option value="mealplan">Assign meal plan note</option></select></label>
+      <label>Group<select name="group"><option value="">—</option>${groupOpts}</select></label>
+      <label>Target template<select name="template"><option value="">—</option>${tplOpts}</select></label>
+      <label style="flex:1;min-width:220px">Meal plan note<input name="mealPlan" maxlength="600" placeholder="e.g. Follow week 2 of your approved plan"></label>
+      <button class="btn" style="margin-bottom:8px">Apply to selected</button></div>
+    <p class="note">Batch actions change only practitioner-assigned fields. Clients see assigned targets and notes in their tracker; no client can see another client’s data.</p></form>`, 'clients');
+}
+function sparkBars(values, target, width = 560, height = 90) {
+  const vals = values.map(v => (v == null ? null : Number(v)));
+  const max = Math.max(1, target || 0, ...vals.filter(v => v != null)) * 1.1;
+  const bw = width / Math.max(1, vals.length);
+  const bars = vals.map((v, i) => v == null ? '' : `<rect x="${(i * bw + bw * 0.15).toFixed(1)}" y="${(height - v / max * height).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${(v / max * height).toFixed(1)}" fill="#1d7349" opacity=".85"><title>${fmt0(v)}</title></rect>`).join('');
+  const tl = target ? `<line x1="0" x2="${width}" y1="${(height - target / max * height).toFixed(1)}" y2="${(height - target / max * height).toFixed(1)}" stroke="#a9492f" stroke-dasharray="4 3"/>` : '';
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Daily energy bars${target ? ' with target line' : ''}">${bars}${tl}</svg>`;
+}
+const TRACKER_MICRO_LABELS = { protein: 'Protein (g)', fiber: 'Fiber (g)', calcium: 'Calcium (mg)', iron: 'Iron (mg)', magnesium: 'Magnesium (mg)', potassium: 'Potassium (mg)', zinc: 'Zinc (mg)', vitC: 'Vitamin C (mg)', vitD: 'Vitamin D (µg)', folate: 'Folate (µg)', b12: 'Vitamin B12 (µg)', vitA: 'Vitamin A (µg)', sodium: 'Sodium (mg)', satFat: 'Saturated fat (g)', addedSugar: 'Added sugar (g)' };
+function adminClientPage(db, orderId, flash = '', printMode = false) {
+  const t = trackerState(db);
+  const order = db.orders.find(o => o.id === orderId);
+  if (!order) return null;
+  const s = clientSummary(db, order);
+  const snap = s.snap || {};
+  const prof = snap.profile || {};
+  const consent = snap.consent || {};
+  const days30 = [];
+  for (let i = 29; i >= 0; i--) { const k = dayKeyAgo(i); days30.push(s.days.find(d => d && d.date === k) || { date: k }); }
+  const recent14 = s.days.filter(d => d && d.date >= dayKeyAgo(13));
+  const avg = k => { const v = recent14.map(d => num(d[k])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const micro = (snap.targets && snap.targets.micro) || {};
+  const microRows = Object.keys(TRACKER_MICRO_LABELS).map(k => {
+    const a = avg(k); const tv = micro[k] || {}; const ref = num(tv.target) || (k === 'protein' ? num(snap.targets && snap.targets.protein) : null); const max = num(tv.max);
+    const pct = a != null && ref ? Math.round(a / ref * 100) : null;
+    const cls = max && a > max ? 'over' : pct == null ? '' : pct < 70 ? 'warn' : 'ok';
+    return `<tr><td>${TRACKER_MICRO_LABELS[k]}</td><td class="r">${fmt0(a, 1)}</td><td class="r">${ref ? fmt0(ref, 1) : '–'}${max ? ` / max ${fmt0(max)}` : ''}</td><td class="r">${pct == null ? '' : `<span class="badge ${cls}">${pct}%</span>`}</td></tr>`;
+  }).join('');
+  const bios = Array.isArray(snap.biometrics) ? snap.biometrics : [];
+  const metrics = snap.metrics || {};
+  const byMetric = {};
+  for (const b of bios) { if (!b || !b.metric) continue; (byMetric[b.metric] = byMetric[b.metric] || []).push(b); }
+  const bioRows = Object.entries(byMetric).map(([k, list]) => {
+    list.sort((a, b) => String(a.date + a.time).localeCompare(String(b.date + b.time)));
+    const last = list[list.length - 1], first = list[0], m = metrics[k] || { name: k, unit: '' };
+    return `<tr><td>${escapeHtml(m.name)}</td><td class="r">${fmt0(last.value, 1)}${last.value2 != null ? '/' + fmt0(last.value2) : ''} ${escapeHtml(m.unit || '')}</td><td>${escapeHtml(last.date)}</td><td class="r">${list.length}</td><td class="r">${list.length > 1 ? `${last.value - first.value >= 0 ? '+' : ''}${fmt0(last.value - first.value, 1)}` : ''}</td></tr>`;
+  }).join('');
+  const fasts = Array.isArray(snap.fasting) ? snap.fasting : [];
+  const meals = Array.isArray(snap.meals) ? snap.meals.slice(-7).reverse() : [];
+  const msgs = clientMessages(db, orderId);
+  const a = s.rec.assigned || {};
+  const tplOpts = Object.entries(t.templates).map(([id, tp]) => `<option value="${escapeHtml(id)}">${escapeHtml(tp.name)} (${fmt0(tp.energy)} kcal)</option>`).join('');
+  const groupChecks = Object.entries(t.groups).map(([id, g]) => `<label style="display:inline-flex;gap:6px;align-items:center;margin-right:14px"><input type="checkbox" name="groups" value="${escapeHtml(id)}" style="width:auto"${s.groups.includes(id) ? ' checked' : ''}> ${escapeHtml(g.name)}</label>`).join('') || '<span class="note">No groups yet — create them under Groups &amp; templates.</span>';
+  const exercise = Array.isArray(snap.exercise) ? snap.exercise : [];
+  const body = `
+  <div class="top"><div><h1>${escapeHtml(order.name)}</h1><p>${escapeHtml(order.email)} · ${escapeHtml(order.phone || '')} · ${escapeHtml(order.packageName || '')} · <a href="/admin/orders/${encodeURIComponent(order.id)}/review" class="noprint">order</a></p></div>
+  <div class="row noprint"><a class="btn ghost" href="/admin/clients">All clients</a><a class="btn ghost" href="/admin/clients/${encodeURIComponent(order.id)}/report" target="_blank">Printable report</a><a class="btn ghost" href="/admin/clients/${encodeURIComponent(order.id)}/export.csv">Export CSV</a></div></div>
+  ${flash ? `<div class="panel pad" role="status" style="border-color:#1d7349;background:#edf3ee">${escapeHtml(flash)}</div>` : ''}
+  <div class="panel"><h2>Overview</h2><div class="kpis">
+    <div class="kpi"><span>Last shared</span><b style="font-size:14px">${s.rec.sharedAt ? escapeHtml(new Date(s.rec.sharedAt).toLocaleString()) : 'Not yet'}</b></div>
+    <div class="kpi"><span>Logged days (14)</span><b>${s.loggedDays14}</b></div>
+    <div class="kpi"><span>Avg energy (14)</span><b>${fmt0(s.avgKcal14)}</b> kcal</div>
+    <div class="kpi"><span>Energy target</span><b>${fmt0(s.goal)}</b> kcal</div>
+    <div class="kpi"><span>Compliance ±10%</span><b>${s.compliance == null ? '–' : Math.round(s.compliance * 100) + '%'}</b></div>
+    <div class="kpi"><span>Weight</span><b>${s.latestWeight ? fmt0(s.latestWeight.value, 1) : '–'}</b> kg ${s.weightChange30 != null ? `<span class="note">(${s.weightChange30 >= 0 ? '+' : ''}${fmt0(s.weightChange30, 1)} / 30 d)</span>` : ''}</div></div>
+    <div class="pad note">Profile: ${escapeHtml([prof.sex, prof.age ? prof.age + ' y' : '', prof.heightCm ? prof.heightCm + ' cm' : '', prof.goal ? 'goal: ' + prof.goal : '', prof.goalWeightKg ? 'goal weight ' + prof.goalWeightKg + ' kg' : '', prof.activity ? 'activity: ' + prof.activity : '', prof.pregnancy && prof.pregnancy !== 'none' ? 'pregnancy: ' + prof.pregnancy : '', prof.lactation && prof.lactation !== 'none' ? 'breastfeeding' : ''].filter(Boolean).join(' · ') || 'not shared')}.
+    Client’s own targets: ${fmt0(num(snap.targets && snap.targets.energy))} kcal, P ${fmt0(num(snap.targets && snap.targets.protein))} g, C ${fmt0(num(snap.targets && snap.targets.carbs))} g, F ${fmt0(num(snap.targets && snap.targets.fat))} g (${escapeHtml((snap.targets && snap.targets.mode) || '–')}).
+    Shared: ${['diary', 'detail', 'biometrics', 'fasting', 'cycle'].map(k => `${k} ${consent[k] ? '✓' : '✗'}`).join(' · ')}</div></div>
+  <div class="panel"><h2>Energy — last 30 days</h2><div class="pad">${sparkBars(days30.map(d => num(d.energy)), s.goal)}<p class="note">Bars = logged energy per day (gaps = not logged). Dashed line = ${s.rec.assigned && s.rec.assigned.energy ? 'practitioner-assigned' : 'client'} target.</p></div>
+    <div class="scroll"><table><thead><tr><th>Date</th><th class="r">kcal</th><th class="r">Protein</th><th class="r">Carbs</th><th class="r">Fat</th><th class="r">Fiber</th><th class="r">Sodium</th><th class="r">Water (ml)</th></tr></thead><tbody>
+    ${s.days.slice(-14).reverse().map(d => `<tr><td>${escapeHtml(d.date)}</td><td class="r">${fmt0(num(d.energy))}</td><td class="r">${fmt0(num(d.protein))}</td><td class="r">${fmt0(num(d.carbs))}</td><td class="r">${fmt0(num(d.fat))}</td><td class="r">${fmt0(num(d.fiber))}</td><td class="r">${fmt0(num(d.sodium))}</td><td class="r">${fmt0(num(d.water))}</td></tr>`).join('') || '<tr><td colspan="8" class="note">No diary data shared.</td></tr>'}</tbody></table></div></div>
+  <div class="grid">
+    <div class="panel"><h2>Nutrients — 14-day average vs targets</h2><div class="scroll"><table><thead><tr><th>Nutrient</th><th class="r">Avg/day</th><th class="r">Target</th><th class="r">%</th></tr></thead><tbody>${recent14.length ? microRows : '<tr><td colspan="4" class="note">No diary data shared in the last 14 days.</td></tr>'}</tbody></table></div><p class="pad note" style="margin:0">Averages include only foods that report each nutrient; low values may reflect incomplete food data.</p></div>
+    <div class="panel"><h2>Biometrics</h2><div class="scroll"><table><thead><tr><th>Measurement</th><th class="r">Latest</th><th>Date</th><th class="r">Readings</th><th class="r">Change</th></tr></thead><tbody>${bioRows || '<tr><td colspan="5" class="note">No biometrics shared.</td></tr>'}</tbody></table></div>
+      <div class="pad note">Fasting (90 d): ${fasts.length ? `${fasts.length} fasts, average ${fmt0(fasts.reduce((x, f) => x + (num(f.hours) || 0), 0) / fasts.length, 1)} h, reached target ${Math.round(fasts.filter(f => f.completed).length / fasts.length * 100)}%` : 'none shared'}. Exercise (90 d): ${exercise.length ? `${exercise.length} sessions, ${fmt0(exercise.reduce((x, e) => x + (num(e.kcal) || 0), 0))} kcal` : 'none shared'}.${snap.cycle ? ` Cycle: average length ${fmt0(num(snap.cycle.avgLength))} days.` : ''}</div></div>
+  </div>
+  ${meals.length ? `<div class="panel"><h2>Food diary (last ${meals.length} logged days)</h2><div class="scroll"><table><thead><tr><th>Date</th><th>Time</th><th>Meal</th><th>Food</th><th>Amount</th><th class="r">kcal</th><th class="r">P / C / F</th></tr></thead><tbody>${meals.map(day => (Array.isArray(day.items) ? day.items : []).map(it => `<tr><td>${escapeHtml(day.date)}</td><td>${escapeHtml(it.time || '')}</td><td>${escapeHtml(it.group || '')}</td><td>${escapeHtml(it.name || '')}${it.estimated ? ' <span class="badge">est.</span>' : ''}</td><td>${escapeHtml(it.amount || '')}</td><td class="r">${fmt0(num(it.kcal))}</td><td class="r">${fmt0(num(it.protein))} / ${fmt0(num(it.carbs))} / ${fmt0(num(it.fat))}</td></tr>`).join('')).join('')}</tbody></table></div></div>` : ''}
+  ${printMode ? '' : `<div class="grid noprint">
+    <div class="panel"><h2>Messages ${s.unread ? `<span class="badge warn">${s.unread} new</span>` : ''}</h2><div class="pad" style="max-height:420px;overflow:auto">${msgs.length ? msgs.slice(-100).map(m => `<div class="msg${m.from === 'practitioner' ? ' me' : ''}">${escapeHtml(m.body).replace(/\n/g, '<br>')}<small>${m.from === 'practitioner' ? 'You' : escapeHtml(order.name)} · ${escapeHtml(new Date(m.at).toLocaleString())}${m.from === 'practitioner' ? (m.readByClient ? ' · Read' : ' · Delivered') : ''}</small></div>`).join('') : '<p class="note">No messages yet.</p>'}</div>
+      <form class="pad" method="post" action="/admin/clients/${encodeURIComponent(order.id)}/message"><label>Reply<textarea name="body" maxlength="2000" required></textarea></label><button class="btn">Send message</button> <span class="note">The client sees it next time they open Care team.</span></form></div>
+    <div class="panel"><h2>Assign targets &amp; meal plan</h2><form class="pad" method="post" action="/admin/clients/${encodeURIComponent(order.id)}/assign">
+      <label>Start from template<select name="template"><option value="">— none (use values below) —</option>${tplOpts}</select></label>
+      <div class="row"><label>Energy (kcal)<input name="energy" type="number" min="800" max="6000" value="${escapeHtml(a.energy || '')}"></label><label>Protein (g)<input name="protein" type="number" min="0" max="500" value="${escapeHtml(a.protein || '')}"></label><label>Carbs (g)<input name="carbs" type="number" min="0" max="900" value="${escapeHtml(a.carbs || '')}"></label><label>Fat (g)<input name="fat" type="number" min="0" max="400" value="${escapeHtml(a.fat || '')}"></label></div>
+      <label>Meal plan note<textarea name="mealPlan" maxlength="600">${escapeHtml(a.mealPlan || '')}</textarea></label>
+      <label>Note to client<textarea name="notes" maxlength="600">${escapeHtml(a.notes || '')}</textarea></label>
+      <button class="btn">Save assignment</button> <button class="btn ghost" name="clear" value="1">Clear</button>
+      <p class="note">Assigned targets appear in the client’s tracker; they choose “Practitioner assigned” to use them.</p></form>
+      <form class="pad" method="post" action="/admin/clients/${encodeURIComponent(order.id)}/groups" style="border-top:1px solid var(--line)"><div style="margin-bottom:8px">${groupChecks}</div><button class="btn ghost">Save groups</button></form>
+      <form class="pad" method="post" action="/admin/clients/${encodeURIComponent(order.id)}/remove" style="border-top:1px solid var(--line)" onsubmit="return confirm('Delete this client’s shared tracker data and messages from the server? Their own device data is not affected.')"><button class="btn danger">Delete shared data</button></form></div>
+  </div>`}
+  <p class="note">Shared by the client from their own tracker. Values are self-recorded and partly estimated; use clinical judgement. Not a medical record.</p>
+  ${printMode ? '<p class="noprint"><button class="btn" onclick="window.print()">Print / Save as PDF</button></p>' : ''}`;
+  return trackerAdminShell(`${order.name} · client`, body, 'clients');
+}
+function adminGroupsPage(db, flash = '') {
+  const t = trackerState(db);
+  const summaries = trackerClientOrders(db).map(o => clientSummary(db, o));
+  const groupRows = Object.entries(t.groups).map(([id, g]) => {
+    const members = summaries.filter(s => s.groups.includes(id));
+    const comp = members.map(m => m.compliance).filter(v => v != null);
+    const wch = members.map(m => m.weightChange30).filter(v => v != null);
+    return `<tr><td><b>${escapeHtml(g.name)}</b><br><span class="note">${escapeHtml(g.description || '')}</span></td><td class="r">${members.length}</td><td class="r">${members.length ? fmt0(members.reduce((x, m) => x + m.loggedDays14, 0) / members.length, 1) : '–'}</td><td class="r">${comp.length ? Math.round(comp.reduce((x, v) => x + v, 0) / comp.length * 100) + '%' : '–'}</td><td class="r">${wch.length ? fmt0(wch.reduce((x, v) => x + v, 0) / wch.length, 1) + ' kg' : '–'}</td>
+      <td class="r"><a class="btn ghost" href="/admin/clients?group=${encodeURIComponent(id)}">Members</a> <a class="btn ghost" href="/admin/groups/${encodeURIComponent(id)}/report" target="_blank">Report</a>
+      <form method="post" action="/admin/groups/${encodeURIComponent(id)}/delete" style="display:inline" onsubmit="return confirm('Delete this group? Clients are not deleted.')"><button class="btn danger">Delete</button></form></td></tr>`;
+  }).join('');
+  const tplRows = Object.entries(t.templates).map(([id, tp]) => `<tr><td><b>${escapeHtml(tp.name)}</b></td><td class="r">${fmt0(tp.energy)}</td><td class="r">${fmt0(tp.protein)}</td><td class="r">${fmt0(tp.carbs)}</td><td class="r">${fmt0(tp.fat)}</td><td>${escapeHtml(shortText(tp.notes || '', 80))}</td><td class="r"><form method="post" action="/admin/templates/${encodeURIComponent(id)}/delete" onsubmit="return confirm('Delete template?')"><button class="btn danger">Delete</button></form></td></tr>`).join('');
+  return trackerAdminShell('Groups & templates', `
+  <div class="top"><div><h1>Groups &amp; target templates</h1><p>Organise tracker clients and assign targets in bulk.</p></div></div>
+  ${flash ? `<div class="panel pad" role="status">${escapeHtml(flash)}</div>` : ''}
+  <div class="panel"><h2>Groups</h2><div class="scroll"><table><thead><tr><th>Group</th><th class="r">Members</th><th class="r">Avg logged days (14)</th><th class="r">Avg compliance</th><th class="r">Avg weight change (30 d)</th><th></th></tr></thead><tbody>${groupRows || '<tr><td colspan="6" class="note">No groups yet.</td></tr>'}</tbody></table></div>
+  <form class="pad row" method="post" action="/admin/groups"><label>Name<input name="name" required maxlength="60"></label><label style="flex:1">Description<input name="description" maxlength="160"></label><button class="btn" style="margin-bottom:8px">Create group</button></form></div>
+  <div class="panel"><h2>Target templates</h2><div class="scroll"><table><thead><tr><th>Template</th><th class="r">kcal</th><th class="r">Protein</th><th class="r">Carbs</th><th class="r">Fat</th><th>Notes</th><th></th></tr></thead><tbody>${tplRows || '<tr><td colspan="7" class="note">No templates yet.</td></tr>'}</tbody></table></div>
+  <form class="pad row" method="post" action="/admin/templates"><label>Name<input name="name" required maxlength="60"></label><label>Energy<input name="energy" type="number" min="800" max="6000" required></label><label>Protein (g)<input name="protein" type="number" min="0" max="500"></label><label>Carbs (g)<input name="carbs" type="number" min="0" max="900"></label><label>Fat (g)<input name="fat" type="number" min="0" max="400"></label><label style="flex:1">Notes<input name="notes" maxlength="300"></label><button class="btn" style="margin-bottom:8px">Save template</button></form></div>
+  <div class="panel"><h2>Recent tracker activity</h2><div class="scroll"><table><thead><tr><th>When</th><th>Action</th><th>Client</th><th>Detail</th></tr></thead><tbody>${t.audit.slice(0, 40).map(e => { const o = db.orders.find(x => x.id === e.orderId); return `<tr><td>${escapeHtml(new Date(e.at).toLocaleString())}</td><td>${escapeHtml(e.action)}</td><td>${o ? escapeHtml(o.name) : '<span class="note">–</span>'}</td><td class="note">${escapeHtml(e.detail || '')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="note">No activity yet.</td></tr>'}</tbody></table></div></div>`, 'groups');
+}
+function adminGroupReport(db, groupId) {
+  const t = trackerState(db);
+  const g = t.groups[groupId];
+  if (!g) return null;
+  const members = trackerClientOrders(db).map(o => clientSummary(db, o)).filter(s => s.groups.includes(groupId));
+  return trackerAdminShell(`${g.name} · group report`, `<div class="top"><div><h1>${escapeHtml(g.name)} — group report</h1><p>${escapeHtml(g.description || '')} · generated ${escapeHtml(new Date().toLocaleString())} · ${members.length} member(s)</p></div><div class="noprint"><button class="btn" onclick="window.print()">Print / Save as PDF</button></div></div>
+  <div class="panel"><div class="scroll"><table><thead><tr><th>Client</th><th class="r">Logged (14 d)</th><th class="r">Avg kcal</th><th class="r">Target</th><th class="r">Compliance</th><th class="r">Weight</th><th class="r">Change 30 d</th><th>Last shared</th></tr></thead><tbody>
+  ${members.map(m => `<tr><td>${escapeHtml(m.order.name)}</td><td class="r">${m.loggedDays14}</td><td class="r">${fmt0(m.avgKcal14)}</td><td class="r">${fmt0(m.goal)}</td><td class="r">${m.compliance == null ? '–' : Math.round(m.compliance * 100) + '%'}</td><td class="r">${m.latestWeight ? fmt0(m.latestWeight.value, 1) : '–'}</td><td class="r">${m.weightChange30 == null ? '–' : fmt0(m.weightChange30, 1)}</td><td>${m.rec.sharedAt ? escapeHtml(new Date(m.rec.sharedAt).toLocaleDateString()) : '–'}</td></tr>`).join('') || '<tr><td colspan="8" class="note">No members.</td></tr>'}</tbody></table></div></div>
+  <p class="note">Confidential — contains client health information. For practitioner use only.</p>`, 'groups');
+}
+function csvCell(v) { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+function sendCsv(res, name, rows) {
+  res.writeHead(200, securityHeaders({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"` }));
+  res.end(rows.map(r => r.map(csvCell).join(',')).join('\r\n'));
+}
+function assignedFromForm(db, form) {
+  const t = trackerState(db);
+  const tp = form.template && t.templates[form.template];
+  const pick = (k, max) => { const v = num(tp && tp[k] != null && !form[k] ? tp[k] : form[k]); return v == null ? null : Math.max(0, Math.min(max, Math.round(v))); };
+  return {
+    energy: pick('energy', 6000), protein: pick('protein', 500), carbs: pick('carbs', 900), fat: pick('fat', 400),
+    mealPlan: String(form.mealPlan || '').trim().slice(0, 600), notes: String(form.notes || (tp && tp.notes) || '').trim().slice(0, 600),
+    template: tp ? tp.name : '', updatedAt: new Date().toISOString()
+  };
+}
+/* Admin route dispatcher (requireAdmin already passed). Returns true when handled. */
+async function handleTrackerAdminRoutes(req, res, url) {
+  const p = url.pathname;
+  if (!(p === '/admin/clients' || p === '/admin/clients.csv' || p.startsWith('/admin/clients/') || p === '/admin/groups' || p.startsWith('/admin/groups/') || p === '/admin/templates' || p.startsWith('/admin/templates/'))) return false;
+  const db = readDb();
+  const t = trackerState(db);
+  if (req.method === 'GET' && p === '/admin/clients') { sendHtml(res, 200, adminClientsPage(db, url)); return true; }
+  if (req.method === 'GET' && p === '/admin/clients.csv') {
+    trackerAudit(db, 'export-clients'); writeDb(db);
+    sendCsv(res, 'bulamu360-tracker-clients.csv', [['name', 'email', 'phone', 'package', 'last_shared', 'logged_days_14', 'avg_kcal_14', 'energy_target', 'compliance_pct', 'latest_weight_kg', 'weight_change_30d', 'groups', 'unread']]
+      .concat(trackerClientOrders(db).map(o => clientSummary(db, o)).map(s => [s.order.name, s.order.email, s.order.phone, s.order.packageName, s.rec.sharedAt || '', s.loggedDays14, s.avgKcal14 == null ? '' : Math.round(s.avgKcal14), s.goal || '', s.compliance == null ? '' : Math.round(s.compliance * 100), s.latestWeight ? s.latestWeight.value : '', s.weightChange30 == null ? '' : s.weightChange30.toFixed(1), s.groups.map(g => t.groups[g].name).join('; '), s.unread])));
+    return true;
+  }
+  if (req.method === 'POST' && p === '/admin/clients/batch') {
+    const body = await readRequestBody(req);
+    const params = new URLSearchParams(body);
+    const ids = params.getAll('ids').filter(id => db.orders.some(o => o.id === id));
+    const form = Object.fromEntries(params);
+    let n = 0;
+    for (const id of ids) {
+      const rec = clientRecord(db, id);
+      if (form.action === 'group' && t.groups[form.group]) { if (!rec.groups.includes(form.group)) rec.groups.push(form.group); n++; }
+      if (form.action === 'ungroup' && form.group) { rec.groups = rec.groups.filter(g => g !== form.group); n++; }
+      if (form.action === 'targets' && t.templates[form.template]) { rec.assigned = { ...(rec.assigned || {}), ...assignedFromForm(db, { template: form.template, mealPlan: (rec.assigned && rec.assigned.mealPlan) || '' }) }; n++; }
+      if (form.action === 'mealplan' && String(form.mealPlan || '').trim()) { rec.assigned = { ...(rec.assigned || {}), mealPlan: String(form.mealPlan).trim().slice(0, 600), updatedAt: new Date().toISOString() }; n++; }
+    }
+    trackerAudit(db, 'batch-' + String(form.action || '').slice(0, 20), '', `${n} client(s)`);
+    writeDb(db);
+    redirect(res, '/admin/clients');
+    return true;
+  }
+  if (p === '/admin/groups' && req.method === 'GET') { sendHtml(res, 200, adminGroupsPage(db)); return true; }
+  if (p === '/admin/groups' && req.method === 'POST') {
+    const form = await readForm(req);
+    const name = String(form.name || '').trim().slice(0, 60);
+    if (name) { t.groups[randomUUID()] = { name, description: String(form.description || '').trim().slice(0, 160), createdAt: new Date().toISOString() }; trackerAudit(db, 'group-created', '', name); writeDb(db); }
+    redirect(res, '/admin/groups'); return true;
+  }
+  let m = p.match(/^\/admin\/groups\/([^/]+)\/(delete|report)$/);
+  if (m) {
+    const id = decodeURIComponent(m[1]);
+    if (m[2] === 'report' && req.method === 'GET') { const html = adminGroupReport(db, id); if (!html) return sendHtml(res, 404, 'Group not found'), true; trackerAudit(db, 'group-report', '', t.groups[id].name); writeDb(db); sendHtml(res, 200, html); return true; }
+    if (m[2] === 'delete' && req.method === 'POST') { delete t.groups[id]; for (const rec of Object.values(t.clients)) rec.groups = (rec.groups || []).filter(g => g !== id); trackerAudit(db, 'group-deleted'); writeDb(db); redirect(res, '/admin/groups'); return true; }
+  }
+  if (p === '/admin/templates' && req.method === 'POST') {
+    const form = await readForm(req);
+    const name = String(form.name || '').trim().slice(0, 60);
+    const energy = num(form.energy);
+    if (name && energy >= 800 && energy <= 6000) { t.templates[randomUUID()] = { name, energy: Math.round(energy), protein: num(form.protein), carbs: num(form.carbs), fat: num(form.fat), notes: String(form.notes || '').trim().slice(0, 300) }; writeDb(db); }
+    redirect(res, '/admin/groups'); return true;
+  }
+  m = p.match(/^\/admin\/templates\/([^/]+)\/delete$/);
+  if (m && req.method === 'POST') { delete t.templates[decodeURIComponent(m[1])]; writeDb(db); redirect(res, '/admin/groups'); return true; }
+  m = p.match(/^\/admin\/clients\/([^/]+)(?:\/(message|assign|groups|remove|report|export\.csv))?$/);
+  if (m) {
+    const id = decodeURIComponent(m[1]);
+    const order = db.orders.find(o => o.id === id);
+    if (!order) { sendHtml(res, 404, 'Client not found'); return true; }
+    const action = m[2] || '';
+    if (!action && req.method === 'GET') {
+      const list = clientMessages(db, id);
+      let changed = false;
+      for (const msg of list) if (msg.from === 'client' && !msg.readByPractitioner) { msg.readByPractitioner = new Date().toISOString(); changed = true; }
+      const html = adminClientPage(db, id, url.searchParams.get('ok') || '');
+      trackerAudit(db, 'client-viewed', id);
+      writeDb(db);
+      sendHtml(res, 200, html);
+      return true;
+    }
+    if (action === 'report' && req.method === 'GET') { trackerAudit(db, 'client-report', id); writeDb(db); sendHtml(res, 200, adminClientPage(db, id, '', true)); return true; }
+    if (action === 'export.csv' && req.method === 'GET') {
+      const snap = (t.clients[id] && t.clients[id].snapshot) || {};
+      trackerAudit(db, 'client-export', id); writeDb(db);
+      const keys = ['energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'addedSugar', 'satFat', 'sodium', 'potassium', 'calcium', 'iron', 'magnesium', 'zinc', 'vitC', 'vitD', 'folate', 'b12', 'vitA', 'omega3', 'water'];
+      const rows = [['type', 'date', 'time', 'name', 'value', 'value2'].concat(keys)];
+      for (const d of (Array.isArray(snap.days) ? snap.days : [])) rows.push(['day', d.date, '', '', '', ''].concat(keys.map(k => d[k] ?? '')));
+      for (const b of (Array.isArray(snap.biometrics) ? snap.biometrics : [])) rows.push(['biometric', b.date, b.time, b.metric, b.value, b.value2 ?? ''].concat(keys.map(() => '')));
+      for (const f of (Array.isArray(snap.fasting) ? snap.fasting : [])) rows.push(['fast', new Date(f.start).toISOString().slice(0, 10), '', f.preset, f.hours, f.target].concat(keys.map(() => '')));
+      sendCsv(res, `bulamu360-client-${id.slice(0, 8)}.csv`, rows);
+      return true;
+    }
+    if (req.method === 'POST') {
+      const params = new URLSearchParams(await readRequestBody(req));
+      const form = Object.fromEntries(params);
+      const rec = clientRecord(db, id);
+      let msg = '';
+      if (action === 'message') {
+        const body = String(form.body || '').trim().slice(0, 2000);
+        if (body) { const list = clientMessages(db, id); list.push({ id: randomUUID(), from: 'practitioner', body, at: new Date().toISOString(), readByPractitioner: true, readByClient: false }); if (list.length > 500) list.splice(0, list.length - 500); trackerAudit(db, 'practitioner-message', id); msg = 'Message sent.'; }
+      }
+      if (action === 'assign') { rec.assigned = form.clear ? null : assignedFromForm(db, form); trackerAudit(db, form.clear ? 'assignment-cleared' : 'assignment-saved', id); msg = form.clear ? 'Assignment cleared.' : 'Assignment saved.'; }
+      if (action === 'groups') { rec.groups = params.getAll('groups').filter(g => t.groups[g]); trackerAudit(db, 'groups-updated', id); msg = 'Groups saved.'; }
+      if (action === 'remove') { delete t.clients[id]; delete t.messages[id]; for (const [h, s] of Object.entries(t.sessions)) if (s.orderId === id) delete t.sessions[h]; trackerAudit(db, 'client-data-deleted', id); writeDb(db); redirect(res, '/admin/clients'); return true; }
+      writeDb(db);
+      redirect(res, `/admin/clients/${encodeURIComponent(id)}?ok=${encodeURIComponent(msg || 'Saved.')}`);
+      return true;
+    }
+  }
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return sendJson(res, 204, {});
@@ -2272,6 +2882,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/orders') return handleCreateOrder(req, res);
     if (req.method === 'POST' && url.pathname === '/api/unlock-plan') return handleUnlockPlan(req, res);
     if (req.method === 'POST' && url.pathname === '/api/recipe-pool') return handleRecipePool(req, res);
+    if (await handleTrackerPublicRoutes(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/admin/login') return sendHtml(res, 200, adminLoginPage());
     if (req.method === 'POST' && url.pathname === '/admin/login') return handleAdminLogin(req, res);
     if (req.method === 'GET' && url.pathname === '/admin/logout') {
@@ -2289,6 +2900,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && url.pathname === '/admin/insights.csv') return exportInsightsCsv(res);
       if (req.method === 'GET' && url.pathname === '/admin/recipes') return sendHtml(res, 200, adminRecipeIntelligencePage());
       if (req.method === 'GET' && url.pathname === '/admin/recipes.csv') return exportRecipeIntelligenceCsv(res);
+      if (await handleTrackerAdminRoutes(req, res, url)) return;
       const followupMatch = url.pathname.match(/^\/admin\/orders\/([^/]+)\/followups\/([^/]+)$/);
       if (followupMatch) return handleAdminFollowupReview(req, res, followupMatch[1], followupMatch[2]);
       const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|review|reminder)$/);
