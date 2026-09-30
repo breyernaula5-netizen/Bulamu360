@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import net from 'node:net';
 import { lookup as dnsLookup } from 'node:dns/promises';
+import { planPdfFromHtml } from './lib/plan-pdf.js';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dataDir = join(root, 'data');
@@ -2494,7 +2495,7 @@ function planEmailHtml(payload, downloadUrl) {
   const pkg = escapeHtml(payload.packageName || 'Bulamu360 Plan');
   const amount = escapeHtml(payload.amount || '');
   const txRef = escapeHtml(payload.txRef || '');
-  const link = downloadUrl ? `<p><a href="${escapeHtml(downloadUrl)}" style="background:#1e3a1a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Open approved plan</a></p>` : '';
+  const link = downloadUrl ? `<p><a href="${escapeHtml(downloadUrl)}" style="background:#1e3a1a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Download your plan (PDF)</a></p>` : '';
   const followupUrl = payload.followupToken ? `${publicBaseUrl}/followup/${payload.followupToken}` : '';
   const followupLink = followupUrl ? `<p><a href="${escapeHtml(followupUrl)}" style="background:#ede8df;color:#1e3a1a;padding:11px 16px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:700">Submit progress review</a></p>` : '';
   const scheduleHtml = followupUrl ? `<div style="background:#f7f3ec;border-left:4px solid #c06820;padding:12px 14px;margin:14px 0">
@@ -2520,7 +2521,7 @@ function planEmailHtml(payload, downloadUrl) {
   return `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#2a1f14;line-height:1.6">
     <h2 style="color:#1e3a1a">Your Bulamu360 plan is approved</h2>
     <p>Hello ${name},</p>
-    <p>Your payment reference has been approved. Your printable plan copy is attached.</p>
+    <p>Your payment reference has been approved. Your personalised plan is attached as a PDF.</p>
     ${link}
     ${followupLink}
     ${scheduleHtml}
@@ -2577,17 +2578,31 @@ function planAttachmentFileName(order = {}) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80) || 'Client';
-  return `${cleanName} - Bulamu360 Plan.html`;
+  return `${cleanName} - Bulamu360 Plan.pdf`;
+}
+
+// The client's plan as a real, styled PDF (server-side, no browser needed).
+function planPdfForOrder(order, audience = 'patient') {
+  const html = sanitizePlanHtml(planHtmlForOrder(order, { audience }));
+  return planPdfFromHtml(html, { clientName: order.name || '', logoPath: join(root, 'bulamu360-logo.png') }).buffer;
+}
+
+function sendPlanPdf(res, order, audience = 'patient') {
+  if (!order) return sendHtml(res, 404, 'Plan not found');
+  const pdf = planPdfForOrder(order, audience);
+  const name = planAttachmentFileName(order).replace(/[^\x20-\x7e]/g, '');
+  res.writeHead(200, securityHeaders({ 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `attachment; filename="${name.replace(/"/g, '')}"`, 'Cache-Control': 'no-store' }));
+  res.end(pdf);
 }
 
 async function sendApprovalEmail(order) {
-  const attachmentContent = Buffer.from(planHtmlForOrder(order, { audience: 'patient' }), 'utf8').toString('base64');
-  const downloadUrl = `${publicBaseUrl}/plan/${order.downloadToken}`;
+  const attachmentContent = planPdfForOrder(order, 'patient').toString('base64');
+  const downloadUrl = `${publicBaseUrl}/plan/${order.downloadToken}/pdf`;
   return await sendResendEmail({
     to: order.email,
     subject: `${order.name || 'Your'} Bulamu360 Plan is ready`,
     html: planEmailHtml(order, downloadUrl),
-    attachments: [{ filename: planAttachmentFileName(order), content: attachmentContent }]
+    attachments: [{ filename: planAttachmentFileName(order), content: attachmentContent, content_type: 'application/pdf' }]
   });
 }
 
@@ -5209,15 +5224,16 @@ function exportCoachQueueCsv(res) {
   res.end([header.join(','), ...rows].join('\n'));
 }
 
-function servePlanByOrder(res, order, download = false, audience = 'patient') {
+function servePlanByOrder(res, order, download = false, audience = 'patient', pdfUrl = '') {
   if (!order) return sendHtml(res, 404, 'Plan not found');
   // Plans are delivered as real PDFs: the page renders the plan and converts it in the browser
   // (assets/bulamu360/b360-pdf.js). "download" links start the PDF automatically.
   const html = sanitizePlanHtml(planHtmlForOrder(order, { audience }));
-  const pdfName = String(planAttachmentFileName(order) || 'Bulamu360_Plan').replace(/\.html?$/i, '') + '.pdf';
+  const pdfName = String(planAttachmentFileName(order) || 'Bulamu360_Plan').replace(/\.(html?|pdf)$/i, '') + '.pdf';
+  if (pdfUrl && download) { res.writeHead(302, securityHeaders({ Location: pdfUrl })); return res.end(); }
   const tool = `<div data-no-pdf style="position:fixed;right:18px;bottom:18px;z-index:99999;font-family:Outfit,Arial,sans-serif"><button type="button" id="b3-pdf-btn" style="display:inline-flex;align-items:center;gap:8px;background:#17693f;color:#fff;border:0;border-radius:999px;padding:14px 22px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 12px 30px rgba(18,53,36,.3)">Download PDF</button></div>
 <script src="/assets/bulamu360/b360-pdf.js"></script>
-<script>(function(){var b=document.getElementById('b3-pdf-btn');function go(){if(!window.B360PDF){alert('The PDF tool could not load. Check your connection and try again.');return;}b.disabled=true;window.B360PDF.fromHtml(document.documentElement.outerHTML, ${JSON.stringify(pdfName)}).catch(function(e){alert(e.message);}).then(function(){b.disabled=false;});}b.addEventListener('click',go);${download ? "window.addEventListener('load',function(){setTimeout(go,500);});" : ''}})();</script>`;
+<script>(function(){var b=document.getElementById('b3-pdf-btn');function go(){if(${JSON.stringify(pdfUrl)}){location.href=${JSON.stringify(pdfUrl)};return;}if(!window.B360PDF){alert('The PDF tool could not load. Check your connection and try again.');return;}b.disabled=true;window.B360PDF.fromHtml(document.documentElement.outerHTML, ${JSON.stringify(pdfName)}).catch(function(e){alert(e.message);}).then(function(){b.disabled=false;});}b.addEventListener('click',go);${download ? "window.addEventListener('load',function(){setTimeout(go,500);});" : ''}})();</script>`;
   const out = html.includes('</body>') ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, tool + '</body>') : html + tool;
   sendHtml(res, 200, out);
 }
@@ -5227,6 +5243,7 @@ function isPrivateStaticPath(requested) {
   const parts = clean.split('/').filter(Boolean);
   if (parts.some(part => part.startsWith('.'))) return true;
   if (parts.includes('data')) return true;
+  if (parts[0] === 'lib') return true;
   if (clean === '/recipes.js') return true;
   if (clean.endsWith('.env') || clean.includes('.env.')) return true;
   if (clean.endsWith('.log') || clean.endsWith('.sql') || clean.endsWith('.yaml') || clean.endsWith('.yml')) return true;
@@ -6142,7 +6159,7 @@ const server = http.createServer(async (req, res) => {
       if (await handleAccountAdminRoutes(req, res, url)) return;
       const followupMatch = url.pathname.match(/^\/admin\/orders\/([^/]+)\/followups\/([^/]+)$/);
       if (followupMatch) return handleAdminFollowupReview(req, res, followupMatch[1], followupMatch[2]);
-      const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|review|reminder|delete|edit|content)$/);
+      const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|pdf|review|reminder|delete|edit|content)$/);
       if (match) {
         const [, id, action] = match;
         const db = readDb();
@@ -6154,16 +6171,19 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST' && action === 'reject') return handleReject(req, res, id);
         if (req.method === 'POST' && action === 'resend') return handleResend(req, res, id);
         if (req.method === 'POST' && action === 'reminder') return handleFollowupReminder(req, res, id);
-        if (req.method === 'GET' && action === 'plan') return servePlanByOrder(res, findOrder(db, id), false, 'admin');
-        if (req.method === 'GET' && action === 'download') return servePlanByOrder(res, findOrder(db, id), true, 'admin');
+        if (req.method === 'GET' && action === 'plan') return servePlanByOrder(res, findOrder(db, id), false, 'admin', `/admin/orders/${encodeURIComponent(id)}/pdf`);
+        if (req.method === 'GET' && action === 'download') return sendPlanPdf(res, findOrder(db, id), 'admin');
+        if (req.method === 'GET' && action === 'pdf') return sendPlanPdf(res, findOrder(db, id), 'admin');
       }
       return sendHtml(res, 404, 'Admin page not found');
     }
     if (req.method === 'GET' && url.pathname.startsWith('/plan/')) {
-      const token = url.pathname.split('/').pop();
+      const parts = url.pathname.split('/').filter(Boolean);
+      const token = parts[1] || '';
       const db = readDb();
-      const order = db.orders.find(o => o.status === 'approved' && o.downloadToken === token);
-      return servePlanByOrder(res, order, false, 'patient');
+      const order = token ? db.orders.find(o => o.status === 'approved' && o.downloadToken === token) : null;
+      if (parts[2] === 'pdf') return sendPlanPdf(res, order, 'patient');
+      return servePlanByOrder(res, order, false, 'patient', `/plan/${encodeURIComponent(token)}/pdf`);
     }
     if (url.pathname.startsWith('/followup/')) {
       const token = url.pathname.split('/').pop();

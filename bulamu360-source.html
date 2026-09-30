@@ -2890,6 +2890,65 @@ body{background:#f7fcf9}
 @media (prefers-reduced-motion:reduce){#personalised-gateways .feat-grid,#pricing .price-grid{scroll-behavior:auto}}
 </style>
 <!-- B360:COMPACT:END -->
+<!-- B360:GWSTYLE:START -->
+<style>
+#personalised-gateways.gw{background:linear-gradient(180deg,#f3faf6 0%,#ffffff 100%);color:#12241a;padding:84px 0!important;position:relative}
+.gw .wrap{max-width:1180px}
+.gw-head{text-align:center;max-width:640px;margin:0 auto 36px}
+.gw-eyebrow{display:inline-block;font:600 12px/1 'Outfit',sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#17693f;background:#e3f3ea;padding:8px 14px;border-radius:999px}
+.gw-head h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:clamp(34px,4.4vw,52px);line-height:1.05;color:#0f3d26;margin:16px 0 10px}
+.gw-head p{color:#4a5f53;font-size:17px;line-height:1.6;margin:0}
+.gw button{font:inherit;color:inherit;text-align:left;cursor:pointer;border:0;background:none;-webkit-tap-highlight-color:transparent}
+.gw-main{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:28px}
+.gw-hero{display:grid!important;grid-template-columns:auto 1fr;grid-template-rows:auto auto;gap:6px 18px;align-items:start;padding:26px 28px!important;border-radius:22px;color:#fff!important;position:relative;overflow:hidden;box-shadow:0 18px 40px rgba(15,61,38,.18);transition:transform .2s ease,box-shadow .2s ease}
+.gw-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:170px;height:170px;border-radius:50%;background:rgba(255,255,255,.08)}
+.gw-hero-a{background:linear-gradient(135deg,#0f3d26,#17693f)!important}
+.gw-hero-b{background:linear-gradient(135deg,#17693f,#1f8a7a)!important}
+.gw-hero:hover{transform:translateY(-3px);box-shadow:0 24px 50px rgba(15,61,38,.24)}
+.gw-hero:focus-visible,.gw-row:focus-visible{outline:3px solid #f07a5a;outline-offset:3px}
+.gw-hero-ico{grid-row:1/3;width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.14);display:grid;place-items:center}
+.gw-hero-txt{display:flex;flex-direction:column;gap:4px;position:relative;z-index:1}
+.gw-hero-txt small{font:600 11.5px/1 'Outfit',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#bfe8d0}
+.gw-hero-txt b{font:600 24px/1.2 'Outfit',sans-serif;color:#fff}
+.gw-hero-txt span{font-size:15px;line-height:1.55;color:rgba(255,255,255,.82)}
+.gw-hero-cta{grid-column:2;display:inline-flex;align-items:center;gap:8px;margin-top:10px;font-weight:600;font-size:15px;color:#fff;background:rgba(255,255,255,.14);padding:10px 16px;border-radius:999px;justify-self:start;position:relative;z-index:1}
+.gw-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.gw-group{background:#fff;border:1px solid #dcece3;border-radius:20px;padding:18px 14px 10px;box-shadow:0 10px 30px rgba(15,61,38,.05)}
+.gw-group h3{font:600 12px/1 'Outfit',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#5f7468;margin:4px 8px 12px}
+.gw-row{display:grid!important;grid-template-columns:42px minmax(0,1fr) 20px;align-items:center;gap:12px;width:100%;padding:10px 8px!important;border-radius:14px;transition:background .15s ease}
+.gw-row+.gw-row{border-top:1px solid #eef5f0}
+.gw-row:hover{background:#f3faf6}
+.gw-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center}
+.gw-g .gw-ico{background:#e3f3ea;color:#17693f}
+.gw-s .gw-ico{background:#e6f3fb;color:#2f7fb3}
+.gw-c .gw-ico{background:#fdece6;color:#d0553b}
+.gw-txt{display:flex;flex-direction:column;min-width:0}
+.gw-txt b{font-weight:600;font-size:15.5px;color:#12241a}
+.gw-txt small{font-size:13px;color:#5f7468;line-height:1.35}
+.gw-go{color:#9fb5a8;transition:transform .15s ease,color .15s ease}
+.gw-row:hover .gw-go{color:#17693f;transform:translateX(3px)}
+@media (max-width:960px){.gw-groups{grid-template-columns:1fr 1fr}.gw-groups .gw-c{grid-column:1/-1}}
+@media (max-width:760px){
+  #personalised-gateways.gw{padding:44px 0!important}
+  .gw-head{margin-bottom:22px}.gw-head p{font-size:15px}
+  .gw-main{grid-template-columns:1fr;gap:12px;margin-bottom:16px}
+  .gw-hero{padding:18px!important;border-radius:18px;gap:4px 14px}
+  .gw-hero-ico{width:44px;height:44px;border-radius:13px}
+  .gw-hero-txt b{font-size:19px}.gw-hero-txt span{font-size:14px}
+  .gw-hero-cta{margin-top:6px;padding:8px 14px;font-size:14px}
+  .gw-groups{grid-template-columns:1fr;gap:12px}
+  .gw-group{padding:12px 8px 6px;border-radius:16px}
+  .gw-group{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .gw-group h3{grid-column:1/-1;margin:4px 6px 4px}
+  .gw-row{grid-template-columns:1fr!important;justify-items:start;gap:8px;padding:12px!important;background:#f6fbf8;border-radius:14px}
+  .gw-row+.gw-row{border-top:0}
+  .gw-go,.gw-txt small{display:none!important}
+  .gw-ico{width:36px;height:36px;border-radius:11px}
+  .gw-txt b{font-size:14px;line-height:1.25}
+}
+@media (prefers-reduced-motion:reduce){.gw-hero,.gw-row,.gw-go{transition:none}.gw-hero:hover{transform:none}}
+</style>
+<!-- B360:GWSTYLE:END -->
 </head>
 <body>
 
@@ -3129,30 +3188,34 @@ body{background:#f7fcf9}
 <a href="#faq">FAQ</a>
 </div></nav>
 <!-- B360:JUMP:END -->
-<section id="personalised-gateways" class="s-dark feature-showcase">
+<section id="personalised-gateways" class="gw" aria-labelledby="gw-title">
+<!-- B360:GATEWAYS:START -->
   <div class="wrap">
-    <div class="sec-head center">
-      <span class="eyebrow eyebrow-w">Everything Personalised for You</span>
-      <h2 class="sec-title" style="color:#fff">A Calm Way to <em style="color:var(--earth5)">Understand Your Nutrition</em></h2>
-      <p class="sec-sub" style="color:rgba(255,255,255,.62)">Start with trust, then choose the guidance you need. Each card opens a working Bulamu360 tool or support area.</p>
+    <div class="gw-head">
+      <span class="gw-eyebrow">Everything personalised for you</span>
+      <h2 id="gw-title">Your nutrition toolbox</h2>
+      <p>Start with two minutes about you, then use the tools you need.</p>
     </div>
-    <p class="b3-swipe" aria-hidden="true">Swipe for more →</p>
-<div class="feat-grid">
-      <div class="feat fg feat-btn" onclick="go('#bmi-tool')"><div class="feat-ico">❤️</div><h4>Understand Your Health</h4><p>Start with a simple assessment and receive a clear health snapshot based on your body, goals, and lifestyle.</p><span class="feat-action">Start My Assessment →</span></div>
-      <div class="feat fb feat-btn" onclick="openToolSection('chat-section')"><div class="feat-ico">💬</div><h4>Ask Bulamu Coach</h4><p>Advanced nutrition coaching support for food, planning, and everyday decisions.</p><span class="feat-action">Advanced Tool →</span></div>
-      <div class="feat fr feat-btn" onclick="openToolSection('food-analyzer')"><div class="feat-ico">🍽️</div><h4>Meal Analyzer</h4><p>Advanced meal interpretation for portions, balance, and better choices.</p><span class="feat-action">Advanced Tool →</span></div>
-      <div class="feat fp feat-btn" onclick="openToolSection('shopping-list')"><div class="feat-ico">🛒</div><h4>Plan Your Shopping</h4><p>Turn your meal guidance into a simple market-friendly shopping list.</p><span class="feat-action">Explore Food Guidance →</span></div>
-      <div class="feat fo feat-btn" onclick="openToolSection('local-intelligence')"><div class="feat-ico">🌿</div><h4>Explore Local Foods</h4><p>Learn how Ugandan foods can support healthier eating without giving up what you love.</p><span class="feat-action">Learn More →</span></div>
-      <div class="feat fy feat-btn" onclick="openToolSection('food-as-medicine')"><div class="feat-ico">🍃</div><h4>Food as Medicine</h4><p>Discover foods that may support energy, immunity, digestion, heart health, and overall wellbeing.</p><span class="feat-action">Learn More →</span></div>
-      <div class="feat fg feat-btn" onclick="openToolSection('symptom-tracker')"><div class="feat-ico">🎯</div><h4>Notice Health Patterns</h4><p>Track symptoms gently and learn when food habits may be connected to how you feel.</p><span class="feat-action">Learn More →</span></div>
-      <div class="feat fb feat-btn" onclick="openToolSection('restaurant-guide')"><div class="feat-ico">🍴</div><h4>Eat Well Outside Home</h4><p>Get guidance for choosing better options at restaurants, events, or while travelling.</p><span class="feat-action">Explore Food Guidance →</span></div>
-      <div class="feat fr feat-btn" onclick="go('#pricing')"><div class="feat-ico">🥗</div><h4>Build Your Meal Plan</h4><p>Create structured menus based on your assessment, budget, health goals, and routine.</p><span class="feat-action">Create My Nutrition Plan →</span></div>
-      <div class="feat fp feat-btn" onclick="go('#pricing')"><div class="feat-ico">👨‍👩‍👧</div><h4>Support Your Whole Household</h4><p>Extend your plan to family members with shared menus, portions, and shopping guidance.</p><span class="feat-action">Choose My Plan →</span></div>
-      <div class="feat fo feat-btn" onclick="openToolSection('templates-section')"><div class="feat-ico">📋</div><h4>Tracking Templates</h4><p>Use simple templates for food, symptoms, hydration, sleep, and habits.</p><span class="feat-action">View Templates →</span></div>
-      <div class="feat fy feat-btn" onclick="openToolSection('emotional-wellness')"><div class="feat-ico">💚</div><h4>Emotional Wellness</h4><p>Support stress, cravings, mood, routine, and emotional eating with kinder guidance.</p><span class="feat-action">Advanced Support →</span></div>
+    <div class="gw-main">
+      <button type="button" class="gw-hero gw-hero-a" onclick="go('#bmi-tool')">
+        <span class="gw-hero-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+        <span class="gw-hero-txt"><small>Step 1 · Free</small><b>Understand your health</b><span>A quick assessment gives you a clear snapshot of your body, goals and routine.</span></span>
+        <span class="gw-hero-cta">Start my assessment <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+      <button type="button" class="gw-hero gw-hero-b" onclick="go('#pricing')">
+        <span class="gw-hero-ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3.5"/><path d="M3 4v5M21 4v16"/></svg></span>
+        <span class="gw-hero-txt"><small>Step 2</small><b>Get your meal plan</b><span>Menus built around your assessment, budget, health goals and local foods.</span></span>
+        <span class="gw-hero-cta">See the plans <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+    <div class="gw-groups">
+      <div class="gw-group gw-g"><h3>Plan & track</h3><button type="button" class="gw-row" onclick="openToolSection('shopping-list')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg></span><span class="gw-txt"><b>Plan your shopping</b><small>A market-friendly list from your meals</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('templates-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM8.5 11h7M8.5 15h5"/></svg></span><span class="gw-txt"><b>Tracking templates</b><small>Food, water, sleep and habit sheets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('symptom-tracker')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><span class="gw-txt"><b>Notice health patterns</b><small>Link how you feel to what you eat</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#pricing')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z"/></svg></span><span class="gw-txt"><b>Your whole household</b><small>Shared menus and portions for family</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
+      <div class="gw-group gw-s"><h3>Learn about food</h3><button type="button" class="gw-row" onclick="openToolSection('local-intelligence')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 6-13 15-14-1 9-6 15-14 15"/><path d="M5 19l7-7"/></svg></span><span class="gw-txt"><b>Local foods</b><small>Ugandan favourites, eaten wisely</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-as-medicine')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11h16a8 8 0 0 1-16 0zM9 7c0-1.5 1-2 1-3M13 7c0-1.5 1-2 1-3"/></svg></span><span class="gw-txt"><b>Food as medicine</b><small>Foods for energy, digestion and heart</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('restaurant-guide')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M16 21V3c2 1 3 4 3 7h-3"/></svg></span><span class="gw-txt"><b>Eating out</b><small>Better choices at restaurants and events</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('food-analyzer')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3.5"/></svg></span><span class="gw-txt"><b>Meal analyser</b><small>Check portions and balance</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
+      <div class="gw-group gw-c"><h3>Get support</h3><button type="button" class="gw-row" onclick="openToolSection('chat-section')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg></span><span class="gw-txt"><b>Ask Bulamu Coach</b><small>Everyday food and planning questions</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="openToolSection('emotional-wellness')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.8 14a4 4 0 0 0 6.4 0M9.5 10h0M14.5 10h0"/></svg></span><span class="gw-txt"><b>Emotional wellness</b><small>Stress, cravings and mood, kindly</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" data-b360-open="diary"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3.5"/><path d="M3 4v5M21 4v16"/></svg></span><span class="gw-txt"><b>Track your food</b><small>Free diary with nutrients and targets</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button><button type="button" class="gw-row" onclick="go('#testimonials')"><span class="gw-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><span class="gw-txt"><b>Client stories</b><small>Real results from Bulamu360 clients</small></span><span class="gw-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
     </div>
     <div id="tool-lock-panel" class="tool-lock-panel" aria-live="polite"></div>
   </div>
+<!-- B360:GATEWAYS:END -->
 </section>
 
 <section class="luxury-merge-band legacy-public-section">
@@ -4119,7 +4182,7 @@ body{background:#f7fcf9}
         <li>Fasting timer &amp; cycle tracking</li>
         <li>Instant PDF &amp; CSV reports</li>
       </ul>
-      <div class="b3l-actions"><button type="button" class="b3l-btn" data-b360-open="diary">Open the free tracker</button><button type="button" class="b3l-btn ghost" data-b360-open="data">Download a report</button></div>
+      <div class="b3l-actions"><button type="button" class="b3l-btn" data-b360-open="diary">Open the free tracker</button><button type="button" class="b3l-btn ghost" data-b360-open="today">See the dashboard</button></div>
       <p class="b3l-note">Example screens with illustrative values. Your tracker stays on your device unless you choose to share it with Breyer.</p>
     </div>
   </div>
@@ -11502,7 +11565,7 @@ S.save = function(immediate){
       S.lastError = e;
       // Free space by trimming the remote-food cache first, then retry once.
       try { S.data.foods.cache = {}; S.data.foods.cacheOrder = []; localStorage.setItem(S.KEY, JSON.stringify(S.data)); }
-      catch (e2) { B.ui && B.ui.toast('Could not save on this device (storage full or blocked). Export a backup from Data & devices.', true); }
+      catch (e2) { B.ui && B.ui.toast('Could not save on this device (storage full or blocked). Your account copy is still safe.', true); }
     }
   };
   if (immediate) run(); else saveTimer = setTimeout(run, 250);
@@ -13239,7 +13302,7 @@ var app = B.app = { view:'diary', date:U.today(), opened:false, views:{} };
 var VIEWS = [
   ['diary','Diary','diary','Track'], ['today','Dashboard','today','Track'], ['foods','Foods & recipes','foods','Track'], ['fasting','Fasting','fast','Track'], ['bio','Biometrics','bio','Track'],
   ['trends','Trends','trends','Insights'], ['analysis','Analysis','analysis','Insights'], ['assistant','Assistant','assistant','Insights'],
-  ['targets','Profile & targets','targets','Setup'], ['cycle','Cycle','cycle','Setup'], ['care','Care team','care','Setup'], ['data','Data & devices','data','Setup']
+  ['targets','Profile & targets','targets','Setup'], ['cycle','Cycle','cycle','Setup'], ['care','Care team','care','Setup'], ['data','My account','profile','Setup']
 ];
 app.VIEWS = VIEWS;
 var TABBAR = ['diary','today','trends','bio','more'];
@@ -13516,7 +13579,7 @@ Dg.addFood = function(ctx){
     function run(append){
       var q = input.value.trim(); st.q = q; var my = ++seq;
       if (st.src === 'local') { st.results = F.searchLocal(q, 60); st.hasMore = false; status.textContent = q ? st.results.length + ' result(s) on this device' : 'Recent and suggested foods'; render(); return; }
-      if (!online) { st.results = []; status.textContent = 'Online lookups are turned off in Data & devices.'; render(); return; }
+      if (!online) { st.results = []; status.textContent = 'Online lookups are turned off.'; render(); return; }
       if (q.length < 2) { st.results = []; status.textContent = 'Type at least 2 characters.'; render(); return; }
       if (!U.online()) { st.results = []; status.textContent = 'You are offline — showing nothing from online sources. Foods on this device still work.'; render(); return; }
       st.loading = true; if (!append) st.results = []; render(); status.textContent = 'Searching ' + (st.src === 'usda' ? 'USDA FoodData Central' : 'Open Food Facts') + '…';
@@ -13525,7 +13588,7 @@ Dg.addFood = function(ctx){
         st.loading = false; st.results = (append ? st.results : []).concat(r.foods); st.hasMore = st.page < r.pages && r.foods.length > 0;
         st.cache = st.cache || {}; r.foods.forEach(function(f){ st.cache[f.id] = f; });
         status.textContent = r.total ? U.fmt(r.total, 0) + ' matches' : 'No matches'; render();
-      }).catch(function(err){ if (my !== seq) return; st.loading = false; status.textContent = ''; res.innerHTML = '<div class="b-callout b-callout-warn">' + U.esc(err.message) + (err.status === 429 ? ' The shared public key has hit its hourly limit. Add your free USDA API key in Data & devices.' : '') + ' Foods on this device still work.</div>'; more.innerHTML = ''; });
+      }).catch(function(err){ if (my !== seq) return; st.loading = false; status.textContent = ''; res.innerHTML = '<div class="b-callout b-callout-warn">' + U.esc(err.message) + (err.status === 429 ? ' The shared public key has hit its hourly limit. Please try again later.' : '') + ' Foods on this device still work.</div>'; more.innerHTML = ''; });
     }
     input.addEventListener('input', U.debounce(function(){ st.page = 1; run(); }, st.src === 'local' ? 120 : 450));
     input.addEventListener('keydown', function(e){ if (e.key === 'ArrowDown') { var f = U.qs('.b-result', res); if (f) { e.preventDefault(); f.focus(); } } if (e.key === 'Enter') { e.preventDefault(); st.page = 1; run(); } });
@@ -14501,7 +14564,7 @@ V.trends = function(main){
     keys.forEach(function(k){ Diary.day(k).entries.forEach(function(e){ if (e.foodId === 'sys:water' || !e.time) return; markers.push({ t:new Date(k + 'T' + e.time).getTime(), label:Diary.groupName(e.group) + ': ' + e.name + ' (' + U.fmt(Diary.entryValues(e).carbs, 0) + ' g carbs)' }); }); });
     readings.forEach(function(r){ markers.forEach(function(m){ if (m.t === r.t) r.t += 1; }); });
     B.charts.timeSeries(chart, { title:'Blood glucose and meals', time:'ms', series:[{ id:'g', label:'Glucose', unit:D().settings.glucoseUnit, color:'var(--b-c2)', type:'dots', points:readings.map(function(r){ return { t:r.t, v:r.v }; }), decimals:1 }], markers:markers, height:260 });
-    U.qs('[data-note]', main).innerHTML = '<p class="b-xs b-muted">Ticks on the time axis mark logged meals (hover for details). For continuous data, import CGM readings from Data & devices.</p>';
+    U.qs('[data-note]', main).innerHTML = '<p class="b-xs b-muted">Ticks on the time axis mark logged meals (hover for details).</p>';
   } else {
     var a = p.id === 'custom' ? st.a : p.a, b = p.id === 'custom' ? st.b : p.b, c = p.id === 'custom' ? st.c : null;
     var ser = [seriesFor(a, keys, 'var(--b-c1)', 'left')];
@@ -14691,7 +14754,7 @@ V.cycle = function(main){
     if ((a = e.target.closest('[data-delp]'))) { B.cycle.removePeriod(a.getAttribute('data-delp')); B.app.render(); return; }
     if ((a = e.target.closest('[data-act]'))) {
       var act = a.getAttribute('data-act');
-      if (act === 'disable') B.ui.confirm('Turn off cycle tracking? Your cycle entries stay on this device unless you delete them in Data & devices.', 'Turn off').then(function(ok){ if (ok) { c.enabled = false; B.store.save(); B.app.render(); } });
+      if (act === 'disable') B.ui.confirm('Turn off cycle tracking? Your cycle entries stay on this device unless you delete them.', 'Turn off').then(function(ok){ if (ok) { c.enabled = false; B.store.save(); B.app.render(); } });
       if (act === 'periodStart') { try { B.cycle.logPeriod(st.day, null); B.ui.toast('Period start logged.'); } catch (err) { B.ui.toast(err.message, true); } B.app.render(); }
       if (act === 'periodEnd') { var open = B.cycle.periods().filter(function(pp){ return !pp.end && pp.start <= st.day; }).pop(); if (!open) { B.ui.toast('Log a period start first.', true); return; } open = c.periods.filter(function(pp){ return pp.id === open.id; })[0]; open.end = st.day; B.store.save(); B.app.render(); }
     }
@@ -15377,19 +15440,28 @@ function showAuth(){
   }
 }
 
-/* ---------- Account settings in Data & devices ---------- */
-var realData = B.app.views.data;
+/* ---------- "My account" replaces the old Data & devices page ---------- */
 B.app.views.data = function(main){
-  realData(main);
-  if (!A.user) return;
-  var sec = U.h('section', { class:'b-panel', style:'margin-top:16px' });
-  sec.innerHTML = '<div class="b-panel-head"><h3>Your account</h3></div><div class="b-panel-body b-stack"><div><b>' + U.esc(A.user.name) + '</b> · ' + U.esc(A.user.email) + '</div>' +
-    '<label class="b-check"><input type="checkbox" data-news' + (A.user.newsletter ? ' checked' : '') + '> Send me Breyer’s occasional nutrition posts</label>' +
-    '<div class="b-row"><button type="button" class="b-btn b-btn-sm" data-syncnow>Save to my account now</button><button type="button" class="b-btn b-btn-sm b-btn-danger" data-out>Sign out</button></div></div>';
-  main.insertBefore(sec, main.children[1] || null);
-  sec.querySelector('[data-news]').onchange = function(e){ api('newsletter', { subscribe:e.target.checked }).then(function(j){ A.user = j.user; B.ui.toast(e.target.checked ? 'Subscribed to Breyer’s nutrition posts.' : 'Unsubscribed.'); }).catch(function(err){ e.target.checked = !e.target.checked; B.ui.toast(err.message, true); }); };
-  sec.querySelector('[data-syncnow]').onclick = function(){ A.saveNow().then(function(){ B.ui.toast(syncError || 'Saved to your account.', !!syncError); }); };
-  sec.querySelector('[data-out]').onclick = A.signOut;
+  var who = A.user || {};
+  var initial = U.esc(((who.name || who.email || '?').trim().charAt(0) || '?').toUpperCase());
+  main.innerHTML = B.viewHead('My account', 'Your tracker is saved to your Bulamu360 account automatically.') +
+    '<section class="b-panel"><div class="b-panel-body b-stack">' +
+      '<div class="b-account-who"><span class="b-account-av" aria-hidden="true">' + initial + '</span><span><b>' + U.esc(who.name || '') + '</b><small>' + U.esc(who.email || '') + '</small></span></div>' +
+      '<label class="b-check"><input type="checkbox" data-news' + (who.newsletter ? ' checked' : '') + '> Send me Breyer’s occasional nutrition posts</label>' +
+      '<div class="b-row"><button type="button" class="b-btn b-btn-sm" data-syncnow>Save now</button><button type="button" class="b-btn b-btn-sm b-btn-danger" data-out>Sign out</button></div>' +
+    '</div></section>' +
+    '<section class="b-panel" style="margin-top:16px"><div class="b-panel-head"><h3>Download a report</h3></div><div class="b-panel-body b-stack">' +
+      '<p class="b-small b-muted">A PDF of your food, nutrients, weight and health numbers.</p>' +
+      '<div class="b-row"><button type="button" class="b-btn b-btn-primary b-btn-sm" data-rep="7">Last 7 days (PDF)</button><button type="button" class="b-btn b-btn-sm" data-rep="30">Last 30 days (PDF)</button></div>' +
+    '</div></section>';
+  var news = main.querySelector('[data-news]');
+  if (news) news.onchange = function(e){ api('newsletter', { subscribe:e.target.checked }).then(function(j){ A.user = j.user; B.ui.toast(e.target.checked ? 'Subscribed to Breyer’s nutrition posts.' : 'Unsubscribed.'); }).catch(function(err){ e.target.checked = !e.target.checked; B.ui.toast(err.message, true); }); };
+  main.querySelector('[data-syncnow]').onclick = function(){ A.saveNow().then(function(){ B.ui.toast(syncError || 'Saved to your account.', !!syncError); }); };
+  main.querySelector('[data-out]').onclick = A.signOut;
+  U.qsa('[data-rep]', main).forEach(function(b){ b.onclick = function(){
+    var n = +b.getAttribute('data-rep'), day = B.app.date || U.today();
+    try { B.reports.pdf({ keys:U.range(day, n), sections:{ nutrition:true, macros:true, micros:true, weight:true, biometrics:true, fasting:true, goals:true, charts:true } }).save('bulamu360-report-' + day + '.pdf'); B.ui.toast('Report downloaded (last ' + n + ' days).'); } catch (err) { B.ui.toast(err.message, true); }
+  }; });
 };
 })();
 
