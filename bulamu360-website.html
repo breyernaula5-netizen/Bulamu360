@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bulamu360 | Your Personal Nutrition Coach, Anytime</title>
+  <meta name="description" content="Bulamu360 provides personalised nutrition plans, recipe guidance, follow-up support, and dietitian-informed wellness coaching for everyday Ugandan and global lifestyles.">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --earth1:#1e3a1a;
+      --earth2:#2d5c24;
+      --earth3:#00cc00;
+      --earth4:#5ea84a;
+      --earth5:#9dd48a;
+      --earth6:#d4eecc;
+      --warm1:#7a3c10;
+      --warm2:#c06820;
+      --cream:#f7f3ec;
+      --parchment:#ede8df;
+      --linen:#e2dbcf;
+      --ink:#2a1f14;
+      --mid:#5a4a38;
+      --muted:#8a7a68;
+      --white:#fff;
+      --shadow:0 18px 60px rgba(42,31,20,.12);
+      --r1:9px;
+      --r2:12px;
+      --r3:18px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:'Outfit',sans-serif;color:var(--ink);background:var(--cream);line-height:1.65;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+    h1,h2,h3,h4{font-family:'Libre Baskerville',serif;line-height:1.18}
+    a{text-decoration:none;color:inherit}
+    .nav{position:sticky;top:0;z-index:20;background:rgba(15,32,9,.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
+    .nav-inner{max-width:1200px;margin:0 auto;padding:15px 24px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+    .brand{display:flex;align-items:center;gap:11px;font-weight:900;color:#fff}
+    .mark{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--earth2),var(--earth3));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;box-shadow:0 8px 24px rgba(0,204,0,.16)}
+    .brand span{display:block;font-family:'Libre Baskerville',serif;font-size:22px;line-height:1}
+    .brand small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-top:2px}
+    .nav-links{display:flex;align-items:center;gap:20px;color:rgba(255,255,255,.72);font-size:13px;font-weight:600}
+    .nav-links a:hover{color:var(--earth5)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:13px 26px;border-radius:100px;font-weight:700;border:1px solid transparent;cursor:pointer;letter-spacing:.01em;transition:all .22s ease}
+    .btn:hover{transform:translateY(-2px)}
+    .btn-primary{background:linear-gradient(135deg,var(--earth1),var(--earth3));color:#fff;box-shadow:0 8px 26px rgba(30,58,26,.3)}
+    .btn-light{background:rgba(255,255,255,.92);color:var(--earth1);border-color:rgba(255,255,255,.22)}
+    .btn-clay{background:linear-gradient(135deg,var(--warm1),var(--warm2));color:#fff;box-shadow:0 8px 26px rgba(122,60,16,.26)}
+    .hero{min-height:calc(100vh - 71px);display:grid;place-items:end center;background:
+      radial-gradient(circle at 75% 35%,rgba(157,212,138,.18),transparent 34%),
+      linear-gradient(90deg,rgba(15,32,9,.94),rgba(30,58,26,.75),rgba(30,58,26,.22)),
+      url("https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=84") center/cover no-repeat;color:#fff}
+    .hero-inner{width:100%;max-width:1200px;padding:90px 24px 58px}
+    .hero-copy{max-width:760px}
+    .eyebrow{display:inline-flex;align-items:center;gap:9px;text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:600;color:var(--earth5);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:9px 13px;margin-bottom:18px}
+    h1{font-size:clamp(46px,6vw,76px);font-weight:700;line-height:1.04;margin:0 0 18px;letter-spacing:0;color:#fff}
+    h1 em{font-style:italic;color:var(--earth5)}
+    .hero p{font-size:20px;max-width:680px;color:rgba(255,255,255,.78);margin:0 0 28px;font-weight:300}
+    .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:30px}
+    .trust-row{display:flex;flex-wrap:wrap;gap:10px}
+    .trust-row span{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.13);border-radius:100px;padding:8px 13px;font-size:12px;font-weight:600;color:rgba(255,255,255,.82)}
+    section{padding:82px 24px}
+    .wrap{max-width:1200px;margin:0 auto}
+    .section-head{max-width:740px;margin-bottom:28px}
+    .section-head.center{text-align:center;margin-left:auto;margin-right:auto}
+    .kicker{text-transform:uppercase;letter-spacing:.2em;color:var(--earth3);font-size:11px;font-weight:600;margin:0 0 10px}
+    h2{font-size:42px;line-height:1.14;margin:0 0 12px;color:var(--earth1)}
+    h2 em{font-style:italic;color:var(--earth3)}
+    .section-head p{font-size:17px;color:var(--muted);margin:0}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+    .card{background:#fff;border:1px solid var(--linen);border-radius:var(--r3);padding:26px;box-shadow:0 4px 18px rgba(42,31,20,.07)}
+    .icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#ebf7e8,var(--earth6));display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--earth1);margin-bottom:15px}
+    .card h3{font-size:19px;margin:0 0 8px;color:var(--earth1)}
+    .card p{margin:0;color:var(--muted);font-size:15px}
+    .band{background:var(--linen)}
+    .how{counter-reset:steps}
+    .step{position:relative;padding-left:58px}
+    .step:before{counter-increment:steps;content:counter(steps);position:absolute;left:0;top:0;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--earth1),var(--earth3));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900}
+    .packages{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch}
+    .package{background:#fff;border:2px solid var(--linen);border-radius:var(--r3);padding:30px 26px;position:relative;box-shadow:0 4px 20px rgba(42,31,20,.07)}
+    .package.featured{background:linear-gradient(155deg,var(--earth1),var(--earth2));border-color:transparent;box-shadow:0 18px 50px rgba(30,58,26,.24);transform:scale(1.03);color:#fff}
+    .package.featured h3,.package.featured .price{color:#fff}
+    .package.featured ul{color:rgba(255,255,255,.78)}
+    .pill{display:inline-flex;background:var(--earth6);color:var(--earth1);border-radius:100px;padding:6px 11px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px}
+    .package.featured .pill{background:rgba(255,255,255,.12);color:var(--earth5);border:1px solid rgba(255,255,255,.14)}
+    .price{font-family:'Libre Baskerville',serif;font-size:38px;font-weight:700;color:var(--earth1);margin:10px 0}
+    .price small{font-size:13px;color:var(--muted);font-weight:700}
+    ul{padding-left:18px;margin:14px 0 0;color:var(--muted)}
+    li{margin:7px 0}
+    .split{display:grid;grid-template-columns:1.05fr .95fr;gap:32px;align-items:center}
+    .photo{min-height:470px;border-radius:var(--r3);background:url("https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=84") center/cover no-repeat;box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.7)}
+    .quote{background:linear-gradient(155deg,var(--earth1),var(--earth2));color:#fff;border-radius:var(--r3);padding:34px;box-shadow:var(--shadow)}
+    .quote p{font-family:'Libre Baskerville',serif;font-size:26px;line-height:1.42;margin:0 0 14px}
+    .quote small{color:rgba(255,255,255,.7)}
+    .faq{display:grid;gap:10px}
+    details{background:#fff;border:1px solid var(--linen);border-radius:var(--r2);padding:18px 20px;box-shadow:0 3px 12px rgba(42,31,20,.05)}
+    summary{cursor:pointer;font-weight:700;color:var(--earth1)}
+    details p{margin:10px 0 0;color:var(--muted)}
+    .cta{background:
+      radial-gradient(circle at 75% 35%,rgba(157,212,138,.14),transparent 36%),
+      linear-gradient(90deg,rgba(30,58,26,.97),rgba(45,92,36,.82)),
+      url("https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&w=1600&q=84") center/cover no-repeat;color:#fff}
+    .cta h2{color:#fff}
+    .cta .section-head p{color:rgba(255,255,255,.82)}
+    footer{padding:30px 24px;background:#0f2009;color:rgba(255,255,255,.68)}
+    footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+    .fine{font-size:12px;max-width:720px}
+    @media(max-width:900px){
+      .nav-links{display:none}
+      h1{font-size:43px}
+      h2{font-size:32px}
+      .hero{min-height:auto}
+      .hero-inner{padding:72px 18px 38px}
+      .grid-3,.grid-2,.packages,.split{grid-template-columns:1fr}
+      section{padding:54px 18px}
+      .photo{min-height:320px}
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="Bulamu360 home">
+        <div class="mark">360</div>
+        <div><span>Bulamu360</span><small>Personal nutrition coach</small></div>
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#packages">Packages</a>
+        <a href="#about">About</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="btn btn-primary" href="https://bulamu360-backend.onrender.com/app">Start Assessment</a>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <div class="eyebrow">Dietitian-informed nutrition support</div>
+          <h1>Bulamu360</h1>
+          <p>Your personal nutrition coach, anytime. Get a personalised food plan built around your body, health goals, lifestyle, budget, and local food realities.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://bulamu360-backend.onrender.com/app">Start Your Nutrition Assessment</a>
+            <a class="btn btn-light" href="#packages">View Packages</a>
+          </div>
+          <div class="trust-row">
+            <span>Weight loss</span>
+            <span>Diabetes support</span>
+            <span>Pregnancy nutrition</span>
+            <span>Family meals</span>
+            <span>Gut-sensitive plans</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="kicker">What Bulamu360 Does</p>
+          <h2>Nutrition guidance that feels practical, personal, and clinically careful.</h2>
+          <p>Bulamu360 connects everyday food choices with health goals, meal planning, follow-up, and expert review.</p>
+        </div>
+        <div class="grid-3">
+          <div class="card"><div class="icon">01</div><h3>Personal Assessment</h3><p>Customers enter their goals, body measurements, health conditions, symptoms, budget, and lifestyle details.</p></div>
+          <div class="card"><div class="icon">02</div><h3>Private Plan Generation</h3><p>The plan engine prepares a customer-specific nutrition plan securely through the backend after order submission.</p></div>
+          <div class="card"><div class="icon">03</div><h3>Approval and Follow-Up</h3><p>Breyer reviews payment and plan safety, then the customer receives an approved plan link or unlock code.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">How It Works</p>
+          <h2>A simple flow from assessment to approved plan.</h2>
+        </div>
+        <div class="grid-2 how">
+          <div class="card step"><h3>Take the assessment</h3><p>Answer questions about your health goals, diet history, body measurements, symptoms, activity, and food preferences.</p></div>
+          <div class="card step"><h3>Choose your package</h3><p>Select the plan level that fits your needs. The Complete Personal Plan is the most popular option.</p></div>
+          <div class="card step"><h3>Submit payment reference</h3><p>Pay using mobile money and submit the transaction reference for admin review.</p></div>
+          <div class="card step"><h3>Unlock your plan</h3><p>After approval, use your secure code or download link to access your personal nutrition plan.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="band">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="kicker">Packages</p>
+          <h2>Choose the support level that matches your goal.</h2>
+          <p>Packages are designed for practical nutrition support, not emergency care or medical diagnosis.</p>
+        </div>
+        <div class="packages">
+          <div class="package">
+            <span class="pill">Starter</span>
+            <h3>Basic Nutrition Guide</h3>
+            <div class="price">UGX 40,000</div>
+            <ul>
+              <li>Personal nutrition snapshot</li>
+              <li>Simple meal direction</li>
+              <li>Basic portion guidance</li>
+              <li>Useful for general wellness</li>
+            </ul>
+          </div>
+          <div class="package featured">
+            <span class="pill">Most Popular</span>
+            <h3>Complete Personal Plan</h3>
+            <div class="price">UGX 70,000</div>
+            <ul>
+              <li>Personalised meal structure</li>
+              <li>Recipe and portion guidance</li>
+              <li>Clinical safety notes where relevant</li>
+              <li>Downloadable approved plan</li>
+              <li>Progress follow-up support</li>
+            </ul>
+          </div>
+          <div class="package">
+            <span class="pill">Specialist</span>
+            <h3>Advanced Condition Plan</h3>
+            <div class="price">UGX 120,000+ <small>depending on package</small></div>
+            <ul>
+              <li>Condition-aware nutrition planning</li>
+              <li>More detailed review gates</li>
+              <li>Support for complex goals</li>
+              <li>Best for diabetes, pregnancy, gut, family, or specialist needs</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="wrap split">
+        <div>
+          <div class="section-head">
+            <p class="kicker">About Bulamu360</p>
+            <h2>Built for real people, real kitchens, and real follow-through.</h2>
+            <p>Bulamu360 is designed to make nutrition guidance more practical: food that can be bought, cooked, enjoyed, and adjusted as life changes.</p>
+          </div>
+          <div class="grid-2">
+            <div class="card"><h3>Local and global food sense</h3><p>Plans can include familiar Ugandan meals, salads, soups, smoothies, and practical global recipes where clinically safe.</p></div>
+            <div class="card"><h3>Safety-first guidance</h3><p>Specialist conditions are handled with caution, review notes, and referral reminders where medical care is needed.</p></div>
+          </div>
+        </div>
+        <div class="photo" role="img" aria-label="Fresh balanced meal ingredients"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="quote">
+          <p>“The best nutrition plan is not just scientifically correct. It must be practical enough to survive a real week.”</p>
+          <small>Bulamu360 philosophy</small>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="band">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">FAQ</p>
+          <h2>Common questions before starting.</h2>
+        </div>
+        <div class="faq">
+          <details open><summary>Is Bulamu360 a medical diagnosis service?</summary><p>No. Bulamu360 provides nutrition guidance and planning support. It does not replace emergency care, diagnosis, medication, or your clinician's advice.</p></details>
+          <details><summary>How do customers receive their plan?</summary><p>After payment reference review and approval, the customer receives an approval code or secure plan link.</p></details>
+          <details><summary>Can Bulamu360 help with diabetes, pregnancy, kidney concerns, or gut issues?</summary><p>It can provide cautious nutrition support, but specialist conditions may require labs, clinician input, and dietitian review before intensifying targets.</p></details>
+          <details><summary>Can I use local foods?</summary><p>Yes. Bulamu360 is designed to work with practical local foods as well as selected global recipes where they make nutritional and culinary sense.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Start Now</p>
+          <h2>Ready for your personal nutrition plan?</h2>
+          <p>Take the assessment, choose your package, submit your payment reference, and unlock your approved Bulamu360 plan.</p>
+        </div>
+        <a class="btn btn-clay" href="https://bulamu360-backend.onrender.com/app">Start Assessment</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <strong>Bulamu360</strong><br>
+        Your personal nutrition coach, anytime.
+      </div>
+      <div class="fine">
+        Bulamu360 provides dietary and lifestyle guidance. It does not replace medical diagnosis, emergency treatment, medication management, or personalised care from your clinician.
+        <br><br>
+        <a href="/privacy" style="color:var(--earth5);font-weight:700">Privacy Policy</a>
+        <span style="color:rgba(255,255,255,.3)"> | </span>
+        <a href="/terms" style="color:var(--earth5);font-weight:700">Terms and Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

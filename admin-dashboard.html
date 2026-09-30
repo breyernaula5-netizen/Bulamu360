@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bulamu360 Admin Dashboard</title>
+  <style>
+    :root{
+      --forest:#1e3a1a;
+      --leaf:#2f6b2b;
+      --clay:#b85c1c;
+      --cream:#f7f3ec;
+      --paper:#fffdf8;
+      --line:#e6dccd;
+      --ink:#241a10;
+      --muted:#6d5d4b;
+      --soft:#f1eadf;
+      --danger:#8a1010;
+      --warn:#8a6200;
+      --ok:#1e5a1a;
+    }
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;background:var(--cream);color:var(--ink);margin:0}
+    a{text-decoration:none}
+    .wrap{max-width:1560px;margin:0 auto;padding:28px}
+    .topbar{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+    .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--clay);font-weight:800;margin:0 0 6px}
+    h1{font-size:30px;line-height:1.15;margin:0;color:var(--forest)}
+    .sub{color:var(--muted);margin:8px 0 0;font-size:14px}
+    .top-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--forest);color:#fff;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800;cursor:pointer;margin:3px 0;font-size:13px;min-height:36px}
+    .ghost{background:#ede8df;color:var(--ink)}
+    .reject,.danger{background:var(--danger);color:#fff}
+    .approve{background:var(--forest);color:#fff}
+    .summary{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;margin:18px 0}
+    .metric{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 26px #2a1f1410}
+    .metric span{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+    .metric b{display:block;font-size:30px;margin-top:4px;color:var(--forest)}
+    .metric.pending b{color:var(--warn)}
+    .metric.approved b{color:var(--ok)}
+    .metric.rejected b{color:var(--danger)}
+    .tabs{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 16px}
+    .tabs a{display:inline-flex;align-items:center;min-height:34px;padding:8px 12px;background:#fff;border-radius:999px;color:var(--forest);border:1px solid var(--line);font-size:13px;font-weight:800}
+    .tabs a:hover,.btn:hover{filter:brightness(.97)}
+    .notice{display:none;background:#fff7da;border-left:4px solid var(--clay);border-radius:8px;padding:12px 14px;margin:0 0 16px;color:#5b3d12;font-size:13px;line-height:1.45}
+    .panel{background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 34px #2a1f1412;overflow:hidden}
+    .table-scroll{overflow:auto}
+    table{width:100%;border-collapse:collapse;min-width:1380px}
+    th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #eee6dc;font-size:13px;line-height:1.45}
+    th{position:sticky;top:0;z-index:1;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#786855;background:#fbf8f3}
+    tbody tr:hover{background:#fffaf1}
+    tbody tr:last-child td{border-bottom:0}
+    .badge{display:inline-flex;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:800;text-transform:capitalize}
+    .pending{background:#fff1c7;color:var(--warn)}
+    .approved{background:#dff3d8;color:var(--ok)}
+    .rejected{background:#ffe1dc;color:var(--danger)}
+    .actions{min-width:230px}
+    .actions form{margin:7px 0}
+    .actions input,.actions select{display:block;width:230px;max-width:100%;padding:9px;border:1px solid #ddd2c2;border-radius:8px;margin-bottom:5px;background:#fffdf9;color:var(--ink)}
+    small{color:var(--muted)}
+    code{display:inline-block;background:var(--soft);padding:4px 6px;border-radius:6px;color:var(--ink);font-size:12px;word-break:break-word}
+    .email-status{margin-top:8px;border-radius:8px;padding:8px;font-size:11px;line-height:1.35;font-weight:800}
+    .email-error{background:#ffe1dc;color:var(--danger)}
+    .email-ok{background:#e4f5dd;color:var(--ok)}
+    .email-queued{background:#fff1c7;color:#8a6200}
+    .safety{border-radius:8px;padding:8px 10px;font-size:12px;font-weight:800;margin-bottom:7px}
+    .safety.safe{background:#e4f5dd;color:var(--ok)}
+    .safety.caution{background:#fff1c7;color:var(--warn)}
+    .safety.review{background:#ffe1dc;color:var(--danger)}
+    .safety.not-captured{background:#eee6dc;color:var(--muted)}
+    .risk-list{font-size:11.5px;line-height:1.45;margin-top:6px}
+    .risk-list span{display:block;border-left:3px solid #d8cfbf;padding-left:7px;margin-top:4px}
+    .chips{display:flex;flex-wrap:wrap;gap:5px}
+    .chips span{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:11px;color:var(--ink)}
+    .empty-row td{padding:24px;color:var(--muted)}
+    @media(max-width:900px){
+      .wrap{padding:16px}
+      .topbar{display:block}
+      .top-actions{justify-content:flex-start;margin-top:14px}
+      .summary{grid-template-columns:1fr}
+      h1{font-size:25px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="templateNotice" class="notice">
+      You are viewing the dashboard template file directly. The working dashboard must be opened through the backend at <strong>/admin</strong>, where live orders and approval actions are inserted securely.
+    </div>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Bulamu360 Admin</p>
+        <h1>Orders and Approval Dashboard</h1>
+        <p class="sub">Review payment references, approve plans, monitor clinical safety, resend emails, and export records.</p>
+      </div>
+      <div class="top-actions">
+        <a class="btn ghost" href="/admin/system">System Status</a>
+        <a class="btn ghost" href="/admin/insights">Insights</a>
+        <a class="btn ghost" href="/admin/orders.csv">Export CSV</a>
+        <a class="btn ghost" href="/admin/logout">Logout</a>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="Order summary">
+      <div class="metric pending"><span>Pending</span><b>{{PENDING_COUNT}}</b></div>
+      <div class="metric approved"><span>Approved</span><b>{{APPROVED_COUNT}}</b></div>
+      <div class="metric rejected"><span>Rejected</span><b>{{REJECTED_COUNT}}</b></div>
+    </section>
+
+    <nav class="tabs" aria-label="Admin navigation">
+      <a href="/admin">All orders</a>
+      <a href="/admin?status=pending">Pending</a>
+      <a href="/admin?status=approved">Approved</a>
+      <a href="/admin?status=rejected">Rejected</a>
+      <a href="/admin/followups">Progress follow-ups</a>
+      <a href="/admin/recipes">Recipe intelligence</a>
+    </nav>
+
+    <main class="panel">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th>Payment</th>
+              <th>Clinical Safety</th>
+              <th>Quality Audit</th>
+              <th>Chapters</th>
+              <th>Status</th>
+              <th>Access</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>{{ROWS_HTML}}</tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function(){
+      var notice = document.getElementById('templateNotice');
+      if (!notice) return;
+      var isTemplatePreview = location.protocol === 'file:' || document.body.textContent.indexOf('{{ROWS_HTML}}') !== -1;
+      if (isTemplatePreview) notice.style.display = 'block';
+    })();
+  </script>
+</body>
+</html>
