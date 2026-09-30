@@ -11,17 +11,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     :root{
-      --cream:#f4ecdf;
-      --cream-2:#eadfcd;
-      --paper:#fbf6ed;
-      --green:#2f4a34;
-      --green-dark:#1f3426;
+      --cream:#f2faf5;
+      --cream-2:#e3f3ea;
+      --paper:#f7fcf9;
+      --green:#1f7a4a;
+      --green-dark:#154d31;
       --olive:#6d7355;
-      --brown:#75624c;
-      --muted:#877968;
-      --line:#d8ccb9;
-      --white:#fffaf2;
-      --shadow:0 18px 50px rgba(47,74,52,.12);
+      --brown:#3f5a4b;
+      --muted:#6b8176;
+      --line:#cfe6d9;
+      --white:#ffffff;
+      --shadow:0 18px 50px rgba(31,122,74,.12);
       --max:1160px;
     }
     *{box-sizing:border-box}
@@ -53,15 +53,15 @@
       right:0;
       z-index:20;
       color:var(--cream);
-      text-shadow:0 1px 24px rgba(31,52,38,.22);
+      text-shadow:0 1px 24px rgba(21,77,49,.22);
       transition:background .35s ease,color .35s ease,box-shadow .35s ease,backdrop-filter .35s ease;
     }
     .nav.is-scrolled{
-      background:rgba(244,236,223,.82);
+      background:rgba(236,248,241,.82);
       color:var(--green);
       text-shadow:none;
       backdrop-filter:blur(18px);
-      box-shadow:0 10px 40px rgba(47,74,52,.08);
+      box-shadow:0 10px 40px rgba(31,122,74,.08);
     }
     .nav .wrap{
       height:92px;
@@ -88,7 +88,7 @@
       font-size:10px;
       text-transform:uppercase;
       letter-spacing:.22em;
-      color:rgba(244,236,223,.72);
+      color:rgba(236,248,241,.72);
     }
     .nav.is-scrolled .logo{color:var(--green)}
     .nav.is-scrolled .logo span{color:var(--muted)}
@@ -99,9 +99,9 @@
       color:var(--cream);
       transition:.25s ease;
     }
-    .reserve{border-color:rgba(244,236,223,.78)}
+    .reserve{border-color:rgba(236,248,241,.78)}
     .reserve:hover{background:var(--cream);color:var(--green)}
-    .nav.is-scrolled .reserve{color:var(--green);border-color:rgba(47,74,52,.45)}
+    .nav.is-scrolled .reserve{color:var(--green);border-color:rgba(31,122,74,.45)}
     .nav.is-scrolled .reserve:hover{background:var(--green);color:var(--cream)}
     .hero{
       min-height:112vh;
@@ -118,9 +118,9 @@
       inset:-10%;
       z-index:1;
       background:
-        radial-gradient(circle at 14% 18%,rgba(244,236,223,.24),transparent 24%),
-        radial-gradient(circle at 72% 12%,rgba(244,236,223,.16),transparent 28%),
-        linear-gradient(90deg,rgba(47,74,52,.42),rgba(47,74,52,.16) 46%,rgba(244,236,223,.04));
+        radial-gradient(circle at 14% 18%,rgba(236,248,241,.24),transparent 24%),
+        radial-gradient(circle at 72% 12%,rgba(236,248,241,.16),transparent 28%),
+        linear-gradient(90deg,rgba(31,122,74,.42),rgba(31,122,74,.16) 46%,rgba(236,248,241,.04));
       pointer-events:none;
       animation:templateFloat 13s ease-in-out infinite alternate;
     }
@@ -132,7 +132,7 @@
       bottom:0;
       z-index:1;
       height:26vh;
-      background:linear-gradient(180deg,transparent,rgba(47,74,52,.24));
+      background:linear-gradient(180deg,transparent,rgba(31,122,74,.24));
       pointer-events:none;
     }
     .hero-copy{
@@ -148,7 +148,7 @@
       font-size:12px;
       text-transform:uppercase;
       letter-spacing:.24em;
-      color:rgba(244,236,223,.76);
+      color:rgba(236,248,241,.76);
     }
     h1{
       font-size:clamp(72px,9.2vw,136px);
@@ -169,8 +169,8 @@
       font-size:clamp(25px,2.7vw,38px);
       line-height:1.55;
       font-weight:500;
-      color:rgba(255,250,242,.9);
-      text-shadow:0 2px 30px rgba(31,52,38,.2);
+      color:rgba(255,255,255,.9);
+      text-shadow:0 2px 30px rgba(21,77,49,.2);
     }
     .hero-actions{
       display:flex;
@@ -188,9 +188,9 @@
       font-weight:500;
       transition:.25s ease;
     }
-    .btn-primary{background:rgba(244,236,223,.08);border:1px solid rgba(244,236,223,.86);color:var(--cream);min-width:300px;min-height:82px;font-size:22px;backdrop-filter:blur(4px)}
+    .btn-primary{background:rgba(236,248,241,.08);border:1px solid rgba(236,248,241,.86);color:var(--cream);min-width:300px;min-height:82px;font-size:22px;backdrop-filter:blur(4px)}
     .btn-primary:hover{background:var(--cream);color:var(--green);transform:translateY(-1px)}
-    .btn-soft{border:1px solid rgba(244,236,223,.78);color:var(--cream)}
+    .btn-soft{border:1px solid rgba(236,248,241,.78);color:var(--cream)}
     .btn-soft:hover{background:var(--cream);color:var(--green)}
     .hero-image{
       position:absolute;
@@ -199,8 +199,8 @@
       height:100%;
       min-height:112vh;
       background:
-        linear-gradient(90deg,rgba(47,74,52,.44),rgba(92,125,86,.13) 50%,rgba(244,236,223,.03)),
-        linear-gradient(180deg,rgba(47,74,52,.08),rgba(47,74,52,.28)),
+        linear-gradient(90deg,rgba(31,122,74,.44),rgba(92,125,86,.13) 50%,rgba(236,248,241,.03)),
+        linear-gradient(180deg,rgba(31,122,74,.08),rgba(31,122,74,.28)),
         url("assets/bulamu360/optimized/hero-flatlay.jpg") center/cover no-repeat;
       background-attachment:fixed;
       background-size:auto,auto,112%;
@@ -243,7 +243,7 @@
       background-position:center;
       position:relative;
       overflow:hidden;
-      box-shadow:0 28px 70px rgba(47,74,52,.12);
+      box-shadow:0 28px 70px rgba(31,122,74,.12);
       transform:translateY(var(--lift,0));
       will-change:transform,filter;
     }
@@ -251,7 +251,7 @@
       content:"";
       position:absolute;
       inset:0;
-      background:linear-gradient(180deg,rgba(47,74,52,.02),rgba(47,74,52,.18));
+      background:linear-gradient(180deg,rgba(31,122,74,.02),rgba(31,122,74,.18));
     }
     .ritual-card.tall{min-height:690px}
     .ritual-copy{
@@ -356,7 +356,7 @@
       box-shadow:var(--shadow);
       transition:transform .5s ease,box-shadow .5s ease;
     }
-    .card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(47,74,52,.16)}
+    .card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(31,122,74,.16)}
     .card img{
       width:100%;
       aspect-ratio:4/3;
@@ -374,13 +374,13 @@
       color:var(--cream);
     }
     .plans h2,.plans h3{color:var(--cream)}
-    .plans .section-head small,.plans p,.plans li{color:rgba(244,236,223,.78)}
+    .plans .section-head small,.plans p,.plans li{color:rgba(236,248,241,.78)}
     .plan-grid{
       display:grid;
       grid-template-columns:repeat(3,1fr);
       gap:1px;
-      border:1px solid rgba(244,236,223,.25);
-      background:rgba(244,236,223,.25);
+      border:1px solid rgba(236,248,241,.25);
+      background:rgba(236,248,241,.25);
     }
     .plan{
       background:var(--green);
@@ -440,7 +440,7 @@
       display:flex;
       align-items:center;
       background:
-        linear-gradient(90deg,rgba(47,74,52,.76),rgba(47,74,52,.18)),
+        linear-gradient(90deg,rgba(31,122,74,.76),rgba(31,122,74,.18)),
         url("assets/bulamu360/optimized/cta-green-table.jpg") center/cover no-repeat;
       color:var(--cream);
       background-attachment:fixed;
@@ -452,7 +452,7 @@
       max-width:680px;
     }
     .gallery-cta p{
-      color:rgba(244,236,223,.86);
+      color:rgba(236,248,241,.86);
       margin:24px 0 30px;
       max-width:540px;
       font-size:18px;
@@ -478,7 +478,7 @@
     details p{margin-top:10px}
     footer{
       background:var(--green-dark);
-      color:rgba(244,236,223,.74);
+      color:rgba(236,248,241,.74);
       padding:48px 0 26px;
     }
     .foot{
@@ -493,16 +493,16 @@
     }
     footer a{
       display:block;
-      color:rgba(244,236,223,.74);
+      color:rgba(236,248,241,.74);
       margin:8px 0;
     }
     footer a:hover{color:var(--cream)}
     .legal{
       margin-top:34px;
       padding-top:18px;
-      border-top:1px solid rgba(244,236,223,.16);
+      border-top:1px solid rgba(236,248,241,.16);
       font-size:12px;
-      color:rgba(244,236,223,.5);
+      color:rgba(236,248,241,.5);
     }
     [data-reveal]{
       opacity:0;
@@ -586,8 +586,8 @@
 <!-- B360:BRAND:END -->
 <!-- B360:BRANDCSS:START -->
 <style id="b360-brand-style">
-.logo.logo-img{display:inline-flex;align-items:center;justify-content:center;background:#fffaf2;border-radius:16px;padding:6px 14px;box-shadow:0 6px 24px rgba(31,52,38,.18);text-shadow:none}
-.logo.logo-img img{display:block;height:50px;width:auto}
+.logo.logo-img{display:inline-flex;align-items:center;justify-content:center;background:transparent;padding:0;text-shadow:none}
+.logo.logo-img img{display:block;height:56px;width:auto;filter:drop-shadow(0 2px 10px rgba(255,255,255,.6))}
 .nav.is-scrolled .logo.logo-img{box-shadow:0 2px 10px rgba(47,74,52,.12)}
 .b3{padding:104px 0;background:var(--paper,#fbf6ed);color:var(--green,#2f4a34)}
 .b3.alt{background:var(--cream,#f4ecdf)}
@@ -660,7 +660,7 @@
         <a href="#services">Services</a>
         <a href="#plans">Plans</a>
       </div>
-      <a class="logo logo-img" href="#top" aria-label="Bulamu360 home"><img src="/bulamu360-wordmark.png" alt="Bulamu360 — Eat better, live better" width="520" height="221"></a>
+      <a class="logo logo-img" href="/" aria-label="Bulamu360 home"><img src="/bulamu360-wordmark.png" alt="Bulamu360 — Eat better, live better" width="520" height="221"></a>
       <div class="nav-right">
         <a href="#meal-plan">Meal plan</a>
         <a href="/tracker">Tracker</a>
@@ -729,9 +729,9 @@
               <div><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="31" fill="none" stroke="#e9dfcf" stroke-width="9"/><circle cx="40" cy="40" r="31" fill="none" stroke="#1f3426" stroke-width="9" stroke-dasharray="195 195" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" font-size="13" font-weight="600" fill="#26231d">2,110</text></svg><b>Burned</b></div>
               <div><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="31" fill="none" stroke="#e9dfcf" stroke-width="9"/><circle cx="40" cy="40" r="31" fill="none" stroke="#7fa37a" stroke-width="9" stroke-dasharray="42 195" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" font-size="13" font-weight="600" fill="#26231d">357</text></svg><b>Remaining</b></div>
             </div>
-            <div class="b3-bar"><span>Protein</span><i style="--w:82%;--c:#2f4a34"></i><span>82%</span></div>
+            <div class="b3-bar"><span>Protein</span><i style="--w:82%;--c:#1f7a4a"></i><span>82%</span></div>
             <div class="b3-bar"><span>Fibre</span><i style="--w:74%;--c:#5f7f8f"></i><span>74%</span></div>
-            <div class="b3-bar"><span>Iron</span><i style="--w:100%;--c:#2f4a34"></i><span>104%</span></div>
+            <div class="b3-bar"><span>Iron</span><i style="--w:100%;--c:#1f7a4a"></i><span>104%</span></div>
             <div class="b3-bar"><span>Calcium</span><i style="--w:58%;--c:#b07a45"></i><span>58%</span></div>
             <div class="b3-meal"><img src="assets/bulamu360/optimized/service-family-table.jpg" alt="" width="40" height="40" loading="lazy"><div><b>Lunch · 690 kcal</b><span>Matooke, beans, dodo, avocado</span></div></div>
           </div>
@@ -746,7 +746,7 @@
               <g fill="#fffaf2" stroke="#5f7f8f" stroke-width="2"><circle cx="46" cy="40" r="3.5"/><circle cx="187" cy="49" r="3.5"/><circle cx="328" cy="57" r="3.5"/></g>
               <g font-size="10" fill="#877968" text-anchor="middle"><text x="46" y="165">Mon</text><text x="93" y="165">Tue</text><text x="140" y="165">Wed</text><text x="187" y="165">Thu</text><text x="234" y="165">Fri</text><text x="281" y="165">Sat</text><text x="328" y="165">Sun</text></g>
             </svg>
-            <div class="b3-legend"><span><i style="background:#2f4a34"></i>Energy</span><span><i style="background:#b07a45"></i>Target</span><span><i style="background:#5f7f8f"></i>Weight</span></div>
+            <div class="b3-legend"><span><i style="background:#1f7a4a"></i>Energy</span><span><i style="background:#b07a45"></i>Target</span><span><i style="background:#5f7f8f"></i>Weight</span></div>
           </div>
         </div>
         <div data-reveal>

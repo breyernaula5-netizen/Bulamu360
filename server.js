@@ -2,6 +2,7 @@ import http from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { scrypt as scryptCb } from 'node:crypto';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -5210,8 +5211,15 @@ function exportCoachQueueCsv(res) {
 
 function servePlanByOrder(res, order, download = false, audience = 'patient') {
   if (!order) return sendHtml(res, 404, 'Plan not found');
-  const headers = download ? { 'Content-Disposition': `attachment; filename="${planAttachmentFileName(order)}"` } : {};
-  sendHtml(res, 200, sanitizePlanHtml(planHtmlForOrder(order, { audience })), headers);
+  // Plans are delivered as real PDFs: the page renders the plan and converts it in the browser
+  // (assets/bulamu360/b360-pdf.js). "download" links start the PDF automatically.
+  const html = sanitizePlanHtml(planHtmlForOrder(order, { audience }));
+  const pdfName = String(planAttachmentFileName(order) || 'Bulamu360_Plan').replace(/\.html?$/i, '') + '.pdf';
+  const tool = `<div data-no-pdf style="position:fixed;right:18px;bottom:18px;z-index:99999;font-family:Outfit,Arial,sans-serif"><button type="button" id="b3-pdf-btn" style="display:inline-flex;align-items:center;gap:8px;background:#2e9e5b;color:#fff;border:0;border-radius:999px;padding:14px 22px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 12px 30px rgba(18,53,36,.3)">Download PDF</button></div>
+<script src="/assets/bulamu360/b360-pdf.js"></script>
+<script>(function(){var b=document.getElementById('b3-pdf-btn');function go(){if(!window.B360PDF){alert('The PDF tool could not load. Check your connection and try again.');return;}b.disabled=true;window.B360PDF.fromHtml(document.documentElement.outerHTML, ${JSON.stringify(pdfName)}).catch(function(e){alert(e.message);}).then(function(){b.disabled=false;});}b.addEventListener('click',go);${download ? "window.addEventListener('load',function(){setTimeout(go,500);});" : ''}})();</script>`;
+  const out = html.includes('</body>') ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, tool + '</body>') : html + tool;
+  sendHtml(res, 200, out);
 }
 
 function isPrivateStaticPath(requested) {
@@ -5591,7 +5599,7 @@ label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:8px}label 
 .note{font-size:12px;color:var(--muted)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
 @media print{.tabs,.noprint{display:none!important}body{background:#fff}.panel{break-inside:avoid;border-color:#ccc}}
 </style></head><body><div class="wrap">
-<nav class="tabs noprint" aria-label="Admin navigation"><a href="/admin">Orders</a><a href="/admin/followups">Follow-ups</a><a href="/admin/clients" class="${active === 'clients' ? 'on' : ''}">Tracker clients</a><a href="/admin/groups" class="${active === 'groups' ? 'on' : ''}">Groups &amp; templates</a><a href="/admin/logout">Log out</a></nav>
+<nav class="tabs noprint" aria-label="Admin navigation"><a href="/admin">Orders</a><a href="/admin/followups">Follow-ups</a><a href="/admin/clients" class="${active === 'clients' ? 'on' : ''}">Tracker clients</a><a href="/admin/groups" class="${active === 'groups' ? 'on' : ''}">Groups &amp; templates</a><a href="/admin/subscribers" class="${active === 'subscribers' ? 'on' : ''}">Accounts &amp; subscribers</a><a href="/admin/logout">Log out</a></nav>
 ${body}</div></body></html>`;
 }
 function adminClientsPage(db, url) {
@@ -5866,6 +5874,195 @@ async function handleTrackerAdminRoutes(req, res, url) {
   return false;
 }
 
+/* =====================================================================
+   BULAMU360 ACCOUNTS - tracker sign-up / sign-in / password reset / newsletter
+   - Passwords: min 8 chars with upper, lower, number and special character; scrypt-hashed
+   - Sessions: random token in an HttpOnly cookie (hash stored server-side), 30 days
+   - Reset: 6-digit code emailed via Resend, 15-minute expiry, 5 attempts
+   - Tracker data saved per account (size-limited)
+   Data lives in db.accounts; nothing else in the database is touched.
+===================================================================== */
+const ACCOUNT_COOKIE = 'b360_session';
+const ACCOUNT_SESSION_DAYS = 30;
+const ACCOUNT_MAX_TRACKER = 900_000;
+function accountsState(db) {
+  if (!db.accounts || typeof db.accounts !== 'object') db.accounts = {};
+  const a = db.accounts;
+  if (!a.users || typeof a.users !== 'object') a.users = {};
+  if (!a.byEmail || typeof a.byEmail !== 'object') a.byEmail = {};
+  if (!a.sessions || typeof a.sessions !== 'object') a.sessions = {};
+  return a;
+}
+function passwordProblems(pw) {
+  const p = String(pw || ''), out = [];
+  if (p.length < 8) out.push('at least 8 characters');
+  if (!/[A-Z]/.test(p)) out.push('an uppercase letter');
+  if (!/[a-z]/.test(p)) out.push('a lowercase letter');
+  if (!/[0-9]/.test(p)) out.push('a number');
+  if (!/[^A-Za-z0-9]/.test(p)) out.push('a special character');
+  if (p.length > 200) out.push('at most 200 characters');
+  return out;
+}
+function hashPassword(pw, salt) {
+  return new Promise((resolve, reject) => scryptCb(String(pw), salt, 64, { N: 16384, r: 8, p: 1 }, (err, key) => err ? reject(err) : resolve(key.toString('hex'))));
+}
+async function verifyPassword(pw, user) {
+  const h = await hashPassword(pw, user.salt);
+  return constantTimeEqual(h, user.passHash);
+}
+function accountCookie(token, maxAgeSec) {
+  const secure = isProduction ? '; Secure' : '';
+  return `${ACCOUNT_COOKIE}=${encodeURIComponent(token || '')}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSec}${secure}`;
+}
+function publicUser(u) { return { id: u.id, name: u.name, email: u.email, newsletter: Boolean(u.newsletter), createdAt: u.createdAt, trackerSavedAt: u.tracker ? u.tracker.savedAt : null }; }
+function currentAccount(req, db) {
+  const tok = getCookie(req, ACCOUNT_COOKIE);
+  if (!tok) return null;
+  const a = accountsState(db), s = a.sessions[hashToken(tok)];
+  if (!s || s.expiresAt < Date.now()) return null;
+  return a.users[s.uid] || null;
+}
+function startAccountSession(res, db, user) {
+  const a = accountsState(db), token = randomBytes(32).toString('hex'), now = Date.now();
+  for (const [h, s] of Object.entries(a.sessions)) if (s.expiresAt < now) delete a.sessions[h];
+  const mine = Object.entries(a.sessions).filter(([, s]) => s.uid === user.id).sort((x, y) => x[1].createdAt - y[1].createdAt);
+  while (mine.length >= 10) delete a.sessions[mine.shift()[0]];
+  a.sessions[hashToken(token)] = { uid: user.id, createdAt: now, expiresAt: now + ACCOUNT_SESSION_DAYS * 864e5 };
+  return accountCookie(token, ACCOUNT_SESSION_DAYS * 86400);
+}
+function sendJsonWithCookie(res, status, data, cookie) {
+  res.writeHead(status, { ...securityHeaders(), 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': cookie });
+  res.end(JSON.stringify(data));
+}
+/* Gentler cleaner for a person's own tracker data (keeps notes and small photo thumbnails). */
+function sanitiseAccountData(value, depth = 0) {
+  if (depth > 12) return null;
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') return value.length > 60000 ? '' : value;
+  if (Array.isArray(value)) return value.slice(0, 20000).map(v => sanitiseAccountData(v, depth + 1));
+  if (typeof value === 'object') { const out = {}; for (const [k, v] of Object.entries(value)) { if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue; out[String(k).slice(0, 120)] = sanitiseAccountData(v, depth + 1); } return out; }
+  return null;
+}
+function validEmail(e) { return /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e); }
+async function handleAccountApi(req, res, url) {
+  const route = url.pathname.replace('/api/account/', '');
+  if (!String(req.headers['content-type'] || '').includes('application/json')) return sendJson(res, 415, { ok: false, error: 'Unsupported request.' });
+  const body = await readRequestJson(req).catch(() => null);
+  if (!body || typeof body !== 'object') return sendJson(res, 400, { ok: false, error: 'Invalid request.' });
+  const db = readDb();
+  const a = accountsState(db);
+  if (route === 'signup') {
+    const name = String(body.name || '').trim().slice(0, 80);
+    const email = String(body.email || '').trim().toLowerCase();
+    const problems = passwordProblems(body.password);
+    if (!name) return sendJson(res, 400, { ok: false, error: 'Please enter your name.' });
+    if (!validEmail(email)) return sendJson(res, 400, { ok: false, error: 'Please enter a valid email address.' });
+    if (problems.length) return sendJson(res, 400, { ok: false, error: 'Your password needs ' + problems.join(', ') + '.' });
+    if (a.byEmail[email]) return sendJson(res, 409, { ok: false, error: 'An account with this email already exists. Sign in instead, or reset your password.' });
+    const salt = randomBytes(16).toString('hex');
+    const user = { id: 'u_' + randomBytes(9).toString('hex'), name, email, salt, passHash: await hashPassword(body.password, salt), newsletter: Boolean(body.newsletter), newsletterAt: body.newsletter ? new Date().toISOString() : null, createdAt: new Date().toISOString(), tracker: null, reset: null };
+    a.users[user.id] = user; a.byEmail[email] = user.id;
+    const cookie = startAccountSession(res, db, user);
+    trackerAudit(db, 'account-created', '', email.replace(/(^.).*(@.*$)/, '$1***$2'));
+    writeDb(db);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+  }
+  if (route === 'login') {
+    const email = String(body.email || '').trim().toLowerCase();
+    const user = a.users[a.byEmail[email]];
+    // Same message and similar timing whether or not the account exists.
+    const ok = user ? await verifyPassword(body.password || '', user) : (await hashPassword(body.password || '', 'x'.repeat(32)), false);
+    if (!ok) return sendJson(res, 401, { ok: false, error: 'Email or password is incorrect.' });
+    const cookie = startAccountSession(res, db, user);
+    user.lastLoginAt = new Date().toISOString();
+    writeDb(db);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+  }
+  if (route === 'forgot') {
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!validEmail(email)) return sendJson(res, 400, { ok: false, error: 'Please enter a valid email address.' });
+    if (!apiKey) return sendJson(res, 503, { ok: false, error: 'Password reset emails are not set up yet. Please contact Breyer on WhatsApp to reset your password.' });
+    const user = a.users[a.byEmail[email]];
+    if (user) {
+      if (user.reset && user.reset.sentAt && Date.now() - Date.parse(user.reset.sentAt) < 60_000) return sendJson(res, 429, { ok: false, error: 'A code was just sent. Please wait a minute before asking again.' });
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      user.reset = { codeHash: hashToken(user.id + ':' + code), expiresAt: Date.now() + 15 * 60_000, tries: 0, sentAt: new Date().toISOString() };
+      writeDb(db);
+      try {
+        await sendResendEmail({ to: user.email, subject: 'Your Bulamu360 password reset code', html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#123524"><h2 style="margin:0 0 12px">Reset your password</h2><p>Hello ${escapeHtml(user.name)},</p><p>Use this code to reset your Bulamu360 password. It expires in 15 minutes.</p><p style="font-size:34px;letter-spacing:8px;font-weight:bold;background:#e9f7ee;border-radius:14px;padding:16px;text-align:center;color:#123524">${code}</p><p style="color:#5f6f66;font-size:13px">If you didn't ask for this, you can ignore this email; your password stays the same.</p></div>` });
+      } catch (err) {
+        console.error('Reset email failed:', err.message);
+        return sendJson(res, 502, { ok: false, error: 'We could not send the email right now. Please try again in a few minutes.' });
+      }
+    }
+    return sendJson(res, 200, { ok: true, message: 'If an account exists for that email, a 6-digit code is on its way. It expires in 15 minutes.' });
+  }
+  if (route === 'reset') {
+    const email = String(body.email || '').trim().toLowerCase(), code = String(body.code || '').replace(/\D/g, '');
+    const user = a.users[a.byEmail[email]];
+    const problems = passwordProblems(body.password);
+    if (problems.length) return sendJson(res, 400, { ok: false, error: 'Your new password needs ' + problems.join(', ') + '.' });
+    if (!user || !user.reset || user.reset.expiresAt < Date.now() || user.reset.tries >= 5) return sendJson(res, 400, { ok: false, error: 'That code has expired or is not valid. Please request a new one.' });
+    user.reset.tries += 1;
+    if (!constantTimeEqual(hashToken(user.id + ':' + code), user.reset.codeHash)) { writeDb(db); return sendJson(res, 400, { ok: false, error: 'That code is not correct. Please check your email and try again.' }); }
+    user.salt = randomBytes(16).toString('hex');
+    user.passHash = await hashPassword(body.password, user.salt);
+    user.reset = null;
+    for (const [h, s] of Object.entries(a.sessions)) if (s.uid === user.id) delete a.sessions[h];
+    const cookie = startAccountSession(res, db, user);
+    writeDb(db);
+    return sendJsonWithCookie(res, 200, { ok: true, user: publicUser(user) }, cookie);
+  }
+  if (route === 'logout') {
+    const tok = getCookie(req, ACCOUNT_COOKIE);
+    if (tok) { delete a.sessions[hashToken(tok)]; writeDb(db); }
+    return sendJsonWithCookie(res, 200, { ok: true }, accountCookie('', 0));
+  }
+  const user = currentAccount(req, db);
+  if (!user) return sendJson(res, 401, { ok: false, error: 'Please sign in.' });
+  if (route === 'me') return sendJson(res, 200, { ok: true, user: publicUser(user) });
+  if (route === 'tracker') return sendJson(res, 200, { ok: true, data: user.tracker ? user.tracker.data : null, savedAt: user.tracker ? user.tracker.savedAt : null });
+  if (route === 'tracker/save') {
+    const raw = JSON.stringify(body.data || null);
+    if (!body.data || raw.length > ACCOUNT_MAX_TRACKER) return sendJson(res, 413, { ok: false, error: 'Your tracker data is too large to save online. Export a backup and clear old entries.' });
+    user.tracker = { data: sanitiseAccountData(body.data), savedAt: new Date().toISOString() };
+    writeDb(db);
+    return sendJson(res, 200, { ok: true, savedAt: user.tracker.savedAt });
+  }
+  if (route === 'newsletter') {
+    user.newsletter = Boolean(body.subscribe);
+    user.newsletterAt = new Date().toISOString();
+    writeDb(db);
+    return sendJson(res, 200, { ok: true, user: publicUser(user) });
+  }
+  return sendJson(res, 404, { ok: false, error: 'Unknown account action.' });
+}
+async function handleAccountRoutes(req, res, url) {
+  if (!url.pathname.startsWith('/api/account/')) return false;
+  if (req.method !== 'POST') { sendJson(res, 405, { ok: false, error: 'Method not allowed' }); return true; }
+  const strict = /\/(signup|login|forgot|reset)$/.test(url.pathname);
+  if (!rateLimit(req, res, strict ? 'account-auth' : 'account', { limit: strict ? 12 : 120, windowMs: 60_000 })) return true;
+  await handleAccountApi(req, res, url);
+  return true;
+}
+/* Admin: newsletter subscribers & account overview (behind existing admin auth). */
+async function handleAccountAdminRoutes(req, res, url) {
+  if (url.pathname !== '/admin/subscribers' && url.pathname !== '/admin/subscribers.csv') return false;
+  const db = readDb(), a = accountsState(db);
+  const users = Object.values(a.users).sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)));
+  const subs = users.filter(u => u.newsletter);
+  if (url.pathname === '/admin/subscribers.csv') {
+    trackerAudit(db, 'export-subscribers'); writeDb(db);
+    sendCsv(res, 'bulamu360-newsletter-subscribers.csv', [['name', 'email', 'subscribed_at', 'account_created']].concat(subs.map(u => [u.name, u.email, u.newsletterAt || '', u.createdAt])));
+    return true;
+  }
+  sendHtml(res, 200, trackerAdminShell('Accounts & subscribers', `<div class="top"><div><h1>Accounts &amp; newsletter</h1><p>${users.length} tracker account(s) · ${subs.length} newsletter subscriber(s)</p></div><div class="row noprint"><a class="btn ghost" href="/admin/subscribers.csv">Export subscribers CSV</a></div></div>
+  <div class="panel"><div class="scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Last sign-in</th><th>Newsletter</th><th>Tracker saved</th></tr></thead><tbody>${users.map(u => `<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(new Date(u.createdAt).toLocaleDateString())}</td><td>${u.lastLoginAt ? escapeHtml(new Date(u.lastLoginAt).toLocaleString()) : '–'}</td><td>${u.newsletter ? '<span class="badge ok">Subscribed</span>' : '<span class="badge">No</span>'}</td><td>${u.tracker ? escapeHtml(new Date(u.tracker.savedAt).toLocaleString()) : '–'}</td></tr>`).join('') || '<tr><td colspan="6" class="note">No accounts yet.</td></tr>'}</tbody></table></div></div>
+  <p class="note">Passwords are stored as salted scrypt hashes; they cannot be viewed. Only people who ticked the newsletter box are included in the export.</p>`, 'subscribers'));
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     res._corsOrigin = corsOriginForRequest(req);
@@ -5883,6 +6080,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/unlock-plan') return handleUnlockPlan(req, res);
     if (req.method === 'POST' && url.pathname === '/api/recipe-pool') return handleRecipePool(req, res);
     if (await handleTrackerPublicRoutes(req, res, url)) return;
+    if (await handleAccountRoutes(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/member/login') return sendHtml(res, 200, memberLoginPage());
     if (req.method === 'POST' && url.pathname === '/member/login') return handleMemberLogin(req, res);
     if (req.method === 'GET' && url.pathname === '/member/logout') {
@@ -5941,6 +6139,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && url.pathname === '/admin/recipes') return sendHtml(res, 200, adminRecipeIntelligencePage());
       if (req.method === 'GET' && url.pathname === '/admin/recipes.csv') return exportRecipeIntelligenceCsv(res);
       if (await handleTrackerAdminRoutes(req, res, url)) return;
+      if (await handleAccountAdminRoutes(req, res, url)) return;
       const followupMatch = url.pathname.match(/^\/admin\/orders\/([^/]+)\/followups\/([^/]+)$/);
       if (followupMatch) return handleAdminFollowupReview(req, res, followupMatch[1], followupMatch[2]);
       const match = url.pathname.match(/^\/admin\/orders\/([^/]+)\/(approve|reject|resend|plan|download|review|reminder|delete|edit|content)$/);
