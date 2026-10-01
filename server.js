@@ -2596,6 +2596,14 @@ function sendPlanPdf(res, order, audience = 'patient') {
 }
 
 async function sendApprovalEmail(order) {
+  if (order.kind === 'subscription') {
+    const cyc = memberCycleInfo(order);
+    return await sendResendEmail({
+      to: order.email,
+      subject: 'Your Bulamu360 subscription is active',
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#123524"><h2 style="color:#0f3d26">Welcome to ${escapeHtml(order.packageName.replace(/ \(monthly\)$/, ''))}</h2><p>Hello ${escapeHtml(order.name || '')},</p><p>Your payment is approved. Your new tools are open in your Bulamu360 account until <strong>${escapeHtml(cyc.activeUntil)}</strong>. Renew each month to keep them.</p><p><a href="${publicBaseUrl}/?signin=1" style="background:#17693f;color:#fff;padding:12px 18px;border-radius:999px;text-decoration:none;display:inline-block">Open my account</a></p></div>`
+    });
+  }
   if (order.kind === 'template') {
     return await sendResendEmail({
       to: order.email,
@@ -2899,6 +2907,16 @@ async function handleCreateOrder(req, res) {
       txRefLength: String(payload.txRef || '').replace(/[^A-Z0-9]/gi, '').length,
       hasProfile: Boolean(payload.profile && typeof payload.profile === 'object')
     });
+    /* B360 SUBSCRIPTIONS */
+    const isSub = payload.kind === 'subscription';
+    const subTier = isSub ? SUBSCRIPTIONS[String(payload.tier || '').toLowerCase()] : null;
+    if (isSub) {
+      if (!subTier) return sendJson(res, 400, { ok: false, error: 'Please choose Pantry, Greenwell or Banquet.' });
+      payload.packageName = subTier.name;
+      payload.amount = 'UGX ' + subTier.price.toLocaleString('en-US') + ' / month';
+      payload.orderType = 'Monthly subscription';
+      if (!payload.profile || typeof payload.profile !== 'object') payload.profile = {};
+    }
     const isTemplate = payload.kind === 'template';
     const tplId = isTemplate ? String(payload.templateId || '') : '';
     if (isTemplate) {
@@ -2914,10 +2932,10 @@ async function handleCreateOrder(req, res) {
     }
     const db = readDb();
     const buyer = currentAccount(req, db);
-    if (isTemplate && !buyer) return sendJson(res, 401, { ok: false, error: 'Please sign in to your Bulamu360 account to buy a template.' });
+    if ((isTemplate || isSub) && !buyer) return sendJson(res, 401, { ok: false, error: isSub ? 'Please sign in to your Bulamu360 account to subscribe.' : 'Please sign in to your Bulamu360 account to buy a template.' });
     const now = new Date().toISOString();
-    const clinicalSummary = isTemplate ? {} : serverClinicalSummaryFromPayload(payload);
-    const privateHtmlPlan = isTemplate ? `<!doctype html><html><body><h1>Template purchase</h1><p>${escapeHtml(payload.packageName)}</p></body></html>` : backendPlanHtml(payload, clinicalSummary);
+    const clinicalSummary = (isTemplate || isSub) ? {} : serverClinicalSummaryFromPayload(payload);
+    const privateHtmlPlan = (isTemplate || isSub) ? `<!doctype html><html><body><h1>Template purchase</h1><p>${escapeHtml(payload.packageName)}</p></body></html>` : backendPlanHtml(payload, clinicalSummary);
     const order = {
       id: makeOrderId(),
       status: 'pending',
@@ -2938,7 +2956,7 @@ async function handleCreateOrder(req, res) {
       htmlPlan: privateHtmlPlan,
       htmlHash: createHash('sha256').update(privateHtmlPlan).digest('hex'),
       planEngine: 'backend-private-v1',
-      kind: isTemplate ? 'template' : 'plan',
+      kind: isTemplate ? 'template' : isSub ? 'subscription' : 'plan',
       templateId: tplId,
       accountId: buyer ? buyer.id : '',
       approvalCode: '',
@@ -3785,7 +3803,13 @@ function memberLevelFromPackage(packageName = '') {
   return 'free';
 }
 
-const ADVANCED_MEMBER_DAYS = 31; // packages are monthly
+const ADVANCED_MEMBER_DAYS = 35; // assessment plans
+const SUBSCRIPTION_DAYS = 31; // monthly subscriptions
+const SUBSCRIPTIONS = {
+  pantry: { name: 'Pantry subscription (monthly)', price: 75000 },
+  greenwell: { name: 'Greenwell subscription (monthly)', price: 150000 },
+  banquet: { name: 'Banquet subscription (monthly)', price: 250000 }
+};
 
 function memberDateLabel(value) {
   if (!value) return '';
@@ -3797,7 +3821,7 @@ function memberDateLabel(value) {
 function memberCycleInfo(order) {
   const approvedAt = order && order.approvedAt ? Date.parse(order.approvedAt) : 0;
   if (!approvedAt) return { approvedAt: '', expiresAt: '', activeUntil: '', daysRemaining: 0, active: false };
-  const expiresAtMs = approvedAt + ADVANCED_MEMBER_DAYS * 86400000;
+  const expiresAtMs = approvedAt + (order && order.kind === 'subscription' ? SUBSCRIPTION_DAYS : ADVANCED_MEMBER_DAYS) * 86400000;
   const daysRemaining = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 86400000));
   return {
     approvedAt: new Date(approvedAt).toISOString(),
@@ -5052,7 +5076,7 @@ async function handleApprove(req, res, id) {
   const db = readDb();
   const order = findOrder(db, id);
   if (!order) return sendHtml(res, 404, 'Order not found');
-  if (order.kind !== 'template' && !(order.adminReview && order.adminReview.checklistComplete)) return redirect(res, `/admin/orders/${encodeURIComponent(id)}/review`);
+  if (order.kind !== 'template' && order.kind !== 'subscription' && !(order.adminReview && order.adminReview.checklistComplete)) return redirect(res, `/admin/orders/${encodeURIComponent(id)}/review`);
   auditAdminAction(db, req, 'order-approve', { orderId: order.id, customer: order.email });
   approveOrder(db, order, form);
   redirect(res, '/admin?status=pending');

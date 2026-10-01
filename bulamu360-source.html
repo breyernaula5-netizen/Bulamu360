@@ -3196,6 +3196,38 @@ body{background:#f7fcf9}
 .st-portrait{display:block;border-radius:50%}
 </style>
 <!-- B360:V3:END -->
+<!-- B360:SUBSTYLE:START -->
+<style id="b360-subs">
+#subscriptions.b3s{padding:84px 0;background:linear-gradient(160deg,#0b3120 0%,#0f3d26 45%,#123f4d 100%);color:#fff;position:relative;overflow:hidden}
+#subscriptions.b3s::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 12% 15%,rgba(47,179,122,.35),transparent 35%),radial-gradient(circle at 88% 85%,rgba(240,122,90,.28),transparent 35%);pointer-events:none}
+.b3s .wrap{position:relative}
+.b3s-head{text-align:center;max-width:680px;margin:0 auto 38px}
+.b3s-eyebrow{display:inline-block;font:600 12px/1 'Outfit',sans-serif;letter-spacing:.18em;text-transform:uppercase;background:rgba(255,255,255,.14);padding:8px 14px;border-radius:999px}
+.b3s-head h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:clamp(32px,4.2vw,50px);line-height:1.08;margin:16px 0 10px;color:#fff}
+.b3s-head h2 em{color:#9fe0bb}
+.b3s-head p{color:rgba(255,255,255,.8);font-size:16.5px;line-height:1.6;margin:0}
+.b3s-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.b3s-card{background:rgba(255,255,255,.97);color:#12241a;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.28);transition:transform .25s ease}
+.b3s-card:hover{transform:translateY(-6px)}
+.b3s-top{padding:22px 22px 18px;color:#fff;background:linear-gradient(135deg,var(--sa),var(--sb));position:relative}
+.b3s-top::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.14)}
+.b3s-pantry{--sa:#17693f;--sb:#2fb37a}.b3s-greenwell{--sa:#1c5f8a;--sb:#17a393}.b3s-banquet{--sa:#8a55b8;--sb:#e2674f}
+.b3s-badge{display:inline-block;font:600 11px/1 'Outfit',sans-serif;letter-spacing:.12em;text-transform:uppercase;background:rgba(255,255,255,.22);padding:6px 10px;border-radius:999px}
+.b3s-top h3{font:700 26px/1.1 'Outfit',sans-serif;margin:12px 0 6px;color:#fff}
+.b3s-price{font:700 34px/1 'Outfit',sans-serif}.b3s-price small{font-size:14px;margin-right:4px;opacity:.85}.b3s-price span{font-size:14px;font-weight:500;opacity:.85;margin-left:6px}
+.b3s-desc{padding:16px 22px 0;margin:0;color:#4a5f53;font-size:14.5px;line-height:1.55}
+.b3s-card ul{list-style:none;margin:12px 0 0;padding:0 22px;display:grid;gap:8px;flex:1}
+.b3s-card li{position:relative;padding-left:26px;font-size:14px;line-height:1.45}
+.b3s-card li::before{content:"✓";position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:var(--sa);color:#fff;font-size:11px;display:grid;place-items:center}
+.b3s-btn{margin:20px 22px 22px;border:0;border-radius:999px;padding:14px 18px;font:600 15px 'Outfit',sans-serif;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--sa),var(--sb));box-shadow:0 10px 24px rgba(0,0,0,.15)}
+.b3s-btn:focus-visible,.b3s-link:focus-visible{outline:3px solid #f07a5a;outline-offset:3px}
+.b3s-card.is-best{outline:3px solid #9fe0bb}
+.b3s-free{text-align:center;margin:26px 0 0;color:rgba(255,255,255,.85);font-size:15px}
+.b3s-free b{color:#fff}
+.b3s-link{border:0;background:none;color:#9fe0bb;font:600 15px 'Outfit',sans-serif;cursor:pointer;padding:0;margin-left:4px}
+@media (max-width:900px){.b3s-grid{grid-template-columns:1fr;max-width:460px;margin:0 auto}#subscriptions.b3s{padding:52px 0}}
+</style>
+<!-- B360:SUBSTYLE:END -->
 </head>
 <body>
 
@@ -3241,9 +3273,10 @@ body{background:#f7fcf9}
       <div class="nav-item">
         <button class="nav-drop-toggle" type="button">Plans <span class="nav-caret">⌄</span></button>
         <div class="nav-drop-menu">
-          <a href="#pricing">Pantry Package <small>Everyday support for your body and routine</small></a>
-          <a href="#pricing">Greenwell Package <small>For health conditions and life-stage needs</small></a>
-          <a href="#pricing">Banquet Package <small>Deeper support and ongoing guidance</small></a>
+          <a href="#pricing">Personal Nutrition Plan <small>Everyday support for your body and routine</small></a>
+          <a href="#pricing">Specialist Clinical Plan <small>For health conditions and life-stage needs</small></a>
+          <a href="#pricing">Advanced Nutrition Program <small>Deeper support and ongoing guidance</small></a>
+          <a href="#subscriptions">Monthly Subscriptions <small>Pantry, Greenwell and Banquet</small></a>
           <a href="#pricing">Household Option <small>Shared meals with individual portions</small></a>
           <a href="#payment">Payment Verification <small>Submit your payment reference</small></a>
           <a href="#unlock-sec">Unlock Plan <small>Use your approval code</small></a>
@@ -3305,9 +3338,10 @@ body{background:#f7fcf9}
   <details class="mob-group">
     <summary>Plans</summary>
     <div class="mob-sub">
-      <a href="#pricing" onclick="closeMob()">Pantry Package</a>
-      <a href="#pricing" onclick="closeMob()">Greenwell Package</a>
-      <a href="#pricing" onclick="closeMob()">Banquet Package</a>
+      <a href="#pricing" onclick="closeMob()">Personal Nutrition Plan</a>
+      <a href="#pricing" onclick="closeMob()">Specialist Clinical Plan</a>
+      <a href="#pricing" onclick="closeMob()">Advanced Nutrition Program</a>
+      <a href="#subscriptions" onclick="closeMob()">Monthly Subscriptions</a>
       <a href="#pricing" onclick="closeMob()">Household Option</a>
       <a href="#payment" onclick="closeMob()">Payment Verification</a>
       <a href="#unlock-sec" onclick="closeMob()">Unlock Plan</a>
@@ -3354,6 +3388,7 @@ body{background:#f7fcf9}
 <!-- B360:HEROBTN:START -->
         <button class="btn btn-ghost btn-lg b360-hero-track" type="button" data-b360-open="diary">Track My Food, Free</button>
 <!-- B360:HEROBTN:END -->
+
 
         <button class="btn btn-ghost btn-lg" onclick="go('#how')">See How It Works</button>
       </div>
@@ -3407,7 +3442,7 @@ body{background:#f7fcf9}
 
 <!-- PERSONALISED GATEWAYS -->
 <!-- B360:JUMP:START -->
-<nav class="b3j" aria-label="Jump to"><div class="b3j-in"><div class="b3j-track"><a href="#bmi-tool" class="b3j-chip c1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4"><i aria-hidden="true"></i>Pantry · Greenwell · Banquet</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8"><i aria-hidden="true"></i>Questions</a><span class="b3j-dup" aria-hidden="true"><a href="#bmi-tool" class="b3j-chip c1" tabindex="-1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary" tabindex="-1"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3" tabindex="-1"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4" tabindex="-1"><i aria-hidden="true"></i>Pantry · Greenwell · Banquet</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)" tabindex="-1"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6" tabindex="-1"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7" tabindex="-1"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8" tabindex="-1"><i aria-hidden="true"></i>Questions</a></span></div></div></nav>
+<nav class="b3j" aria-label="Jump to"><div class="b3j-in"><div class="b3j-track"><a href="#bmi-tool" class="b3j-chip c1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4"><i aria-hidden="true"></i>Meal plans</a><a href="#subscriptions" class="b3j-chip c2"><i aria-hidden="true"></i>Monthly subscriptions</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8"><i aria-hidden="true"></i>Questions</a><span class="b3j-dup" aria-hidden="true"><a href="#bmi-tool" class="b3j-chip c1" tabindex="-1"><i aria-hidden="true"></i>Get my meal plan</a><a href="#b360-launch" class="b3j-chip c2" data-b360-open="diary" tabindex="-1"><i aria-hidden="true"></i>Track food free</a><a href="#personalised-gateways" class="b3j-chip c3" tabindex="-1"><i aria-hidden="true"></i>Nutrition toolbox</a><a href="#pricing" class="b3j-chip c4" tabindex="-1"><i aria-hidden="true"></i>Meal plans</a><a href="#subscriptions" class="b3j-chip c2" tabindex="-1"><i aria-hidden="true"></i>Monthly subscriptions</a><a href="#templates-section" class="b3j-chip c5" onclick="openToolSection('templates-section', event)" tabindex="-1"><i aria-hidden="true"></i>Tracking templates</a><a href="#payment" class="b3j-chip c6" tabindex="-1"><i aria-hidden="true"></i>Pay with MoMo</a><a href="#testimonials" class="b3j-chip c7" tabindex="-1"><i aria-hidden="true"></i>Client stories</a><a href="#faq" class="b3j-chip c8" tabindex="-1"><i aria-hidden="true"></i>Questions</a></span></div></div></nav>
 <!-- B360:JUMP:END -->
 <section id="personalised-gateways" class="gw" aria-labelledby="gw-title">
 <!-- B360:GATEWAYS:START -->
@@ -3561,7 +3596,7 @@ body{background:#f7fcf9}
       <div class="how-flow" aria-label="Bulamu360 nutrition support flow">
         <div class="how-flow-card"><div class="how-flow-num">1</div><h4>Start With Your Assessment</h4><p>Share your body measurements, goals, routine, food access, health concerns, allergies, and preferences.</p></div>
         <div class="how-flow-card"><div class="how-flow-num">2</div><h4>Receive a Clear Snapshot</h4><p>Bulamu360 explains your starting point in plain language, without shame or confusing medical jargon.</p></div>
-        <div class="how-flow-card"><div class="how-flow-num">3</div><h4>Choose Your Support Level</h4><p>Choose Pantry, Greenwell or Banquet depending on how much guidance and review you need.</p></div>
+        <div class="how-flow-card"><div class="how-flow-num">3</div><h4>Choose Your Support Level</h4><p>Select Personal, Specialist, or Advanced support depending on how much guidance and review you need.</p></div>
         <div class="how-flow-card"><div class="how-flow-num">4</div><h4>Verify and Unlock Your Guide</h4><p>Submit your Mobile Money reference, wait for approval, then use your approval code to access your plan.</p></div>
       </div>
       <div class="how-photo" style="background-image:url('assets/bulamu360/optimized/service-personal-plan.jpg')" role="img" aria-label="Open nutrition planning book with fresh foods"></div>
@@ -4435,6 +4470,38 @@ body{background:#f7fcf9}
   </div>
 </section>
 
+<!-- B360:SUBS:START -->
+<section id="subscriptions" class="b3s" aria-labelledby="b3s-title">
+  <div class="wrap">
+    <div class="b3s-head">
+      <span class="b3s-eyebrow">Monthly subscriptions</span>
+      <h2 id="b3s-title">Keep going with your <em>Bulamu360 account</em></h2>
+      <p>Separate from your meal plan. Subscribe any time to unlock more tracking and support in your account. Renew each month.</p>
+    </div>
+    <div class="b3s-grid">
+      <article class="b3s-card b3s-pantry is-best">
+        <div class="b3s-top"><span class="b3s-badge">Most popular</span><h3>Pantry</h3><div class="b3s-price"><small>UGX</small>75K<span>/ month</span></div></div>
+        <p class="b3s-desc">Everyday tools to eat well and see your progress.</p>
+        <ul><li>Food diary with trends, fasting and cycle tracking</li><li>Sleep graph and daily water & food advice</li><li>All tracking templates (PDF)</li><li>Shopping lists, local foods, food as medicine, eating out</li><li>30-day PDF reports</li></ul>
+        <button type="button" class="b3s-btn" data-subscribe="pantry">Subscribe to Pantry</button>
+      </article>
+      <article class="b3s-card b3s-greenwell">
+        <div class="b3s-top"><span class="b3s-badge">Health focus</span><h3>Greenwell</h3><div class="b3s-price"><small>UGX</small>150K<span>/ month</span></div></div>
+        <p class="b3s-desc">For health conditions and closer review of your numbers.</p>
+        <ul><li>Everything in Pantry</li><li>Full nutrient analysis</li><li>Care team: share your tracker and message Breyer</li><li>Symptom tracker</li><li>Condition-aware reminders</li></ul>
+        <button type="button" class="b3s-btn" data-subscribe="greenwell">Subscribe to Greenwell</button>
+      </article>
+      <article class="b3s-card b3s-banquet">
+        <div class="b3s-top"><span class="b3s-badge">Everything included</span><h3>Banquet</h3><div class="b3s-price"><small>UGX</small>250K<span>/ month</span></div></div>
+        <p class="b3s-desc">Every Bulamu360 tool with deeper coaching.</p>
+        <ul><li>Everything in Greenwell</li><li>Ask Bulamu Coach and the smart Assistant</li><li>Meal Analyzer and emotional wellness</li><li>Zipped folder of every template</li><li>Priority progress reviews</li></ul>
+        <button type="button" class="b3s-btn" data-subscribe="banquet">Subscribe to Banquet</button>
+      </article>
+    </div>
+    <p class="b3s-free"><b>Free account:</b> food diary, dashboard, foods, biometrics, targets, 7-day reports and 4 tracking templates. <button type="button" class="b3s-link" data-b360-open="diary">Create a free account →</button></p>
+  </div>
+</section>
+<!-- B360:SUBS:END -->
 <!-- PAYMENT -->
 <section id="payment" class="s-parch">
   <div class="wrap">
@@ -4775,7 +4842,7 @@ body{background:#f7fcf9}
 
     <span class="eyebrow">Printable PDFs</span>
     <h2 class="sec-title">Download Your <em>Tracking Templates</em></h2>
-    <p style="color:var(--muted);font-size:15px;margin-bottom:32px;line-height:1.7">Four templates are free. The Symptom Journal and Weekly Progress Review are UGX 7,000 each, or free with any package. Banquet members also get every template in one zipped folder.</p>
+    <p style="color:var(--muted);font-size:15px;margin-bottom:32px;line-height:1.7">Four templates are free. The Symptom Journal and Weekly Progress Review are UGX 7,000 each, or free with any plan or subscription. Banquet subscribers also get every template in one zipped folder.</p>
     <div class="feat-section-grid" id="templates-grid"></div>
   
       </div></div>
@@ -4923,35 +4990,35 @@ body{background:#f7fcf9}
 </section>
 
 <!-- ADVANCED MEMBERSHIP -->
-<section id="membership" class="legacy-public-section" style="padding:64px 0;background:linear-gradient(160deg,#0d3a22,#1a3514)">
+<section id="membership" class="legacy-public-section" style="padding:64px 0;background:linear-gradient(160deg,#0f2009,#1a3514)">
   <div class="wrap" style="text-align:center">
-    <span class="eyebrow" style="color:var(--earth5)">Banquet membership</span>
-    <h2 class="sec-title" style="color:#fff">Banquet Package <em style="color:#1f7a4a">Membership</em></h2>
-    <p style="color:rgba(255,255,255,.58);font-size:15px;margin:0 auto 30px;max-width:760px;line-height:1.75">No separate subscription product. When your Banquet Package is approved, your member tools open for a monthly support cycle. Renew monthly when you want continued coaching, tracking, and progress support.</p>
+    <span class="eyebrow" style="color:var(--earth5)">Advanced membership</span>
+    <h2 class="sec-title" style="color:#fff">Advanced Nutrition Program <em style="color:#00cc00">Membership</em></h2>
+    <p style="color:rgba(255,255,255,.58);font-size:15px;margin:0 auto 30px;max-width:760px;line-height:1.75">No separate subscription product. When your Advanced Nutrition Program is approved, your member tools open for a 35-day support cycle. Renew monthly when you want continued coaching, tracking, and progress support.</p>
     <div class="feat-section-grid-2">
       <div style="background:rgba(255,255,255,.07);border-radius:20px;padding:26px;border:1px solid rgba(255,255,255,.12);text-align:left">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.45);margin-bottom:12px">Free entry point</div>
         <div style="font-family:'Libre Baskerville',serif;font-size:30px;font-weight:700;color:#fff;margin-bottom:4px">Assessment First</div>
         <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px">Always available before payment</div>
         <ul style="list-style:none;padding:0;margin:0 0 22px">
-          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Start the health and nutrition assessment</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Receive a basic health snapshot</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Choose Pantry, Greenwell or Banquet</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Submit payment reference for review</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Start the health and nutrition assessment</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Receive a basic health snapshot</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Choose Personal, Specialist, or Advanced support</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.72);padding:7px 0;display:flex;gap:8px"><span style="color:#00cc00">-</span>Submit payment reference for review</li>
         </ul>
         <a href="#bmi-tool" class="btn btn-outline btn-block" style="border-radius:var(--r2);padding:13px;font-size:14px;display:block;text-align:center;text-decoration:none">Start My Assessment -></a>
       </div>
-      <div style="background:linear-gradient(160deg,rgba(31,122,74,.16),rgba(20,83,45,.48));border-radius:20px;padding:26px;border:1px solid rgba(31,122,74,.32);text-align:left;position:relative">
-        <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#1f7a4a;color:#0d3a22;font-size:11px;font-weight:800;padding:4px 14px;border-radius:100px;white-space:nowrap">MEMBER ACCESS</div>
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1f7a4a;margin-bottom:12px">Banquet Package</div>
-        <div style="font-family:'Libre Baskerville',serif;font-size:32px;font-weight:700;color:#fff;margin-bottom:4px">UGX 250K<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.5)"> / month</span></div>
-        <div style="font-size:13px;color:rgba(255,255,255,.48);margin-bottom:18px">monthly active access - renew monthly</div>
+      <div style="background:linear-gradient(160deg,rgba(0,204,0,.16),rgba(30,58,26,.48));border-radius:20px;padding:26px;border:1px solid rgba(0,204,0,.32);text-align:left;position:relative">
+        <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#00cc00;color:#0f2009;font-size:11px;font-weight:800;padding:4px 14px;border-radius:100px;white-space:nowrap">MEMBER ACCESS</div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#00cc00;margin-bottom:12px">Advanced Nutrition Program</div>
+        <div style="font-family:'Libre Baskerville',serif;font-size:32px;font-weight:700;color:#fff;margin-bottom:4px">UGX 200K<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.5)">+</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.48);margin-bottom:18px">35-day active access - renew monthly</div>
         <ul style="list-style:none;padding:0;margin:0 0 22px">
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Everything in Pantry and Greenwell</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Ask Bulamu Coach access</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Meal Analyzer and emotional wellness tools</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Progress timeline and food diary review</li>
-          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;display:flex;gap:8px"><span style="color:#1f7a4a">-</span>Renew monthly for a fresh support cycle</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Everything in the Personal Nutrition Plan</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Ask Bulamu Coach access</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Meal Analyzer and emotional wellness tools</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);display:flex;gap:8px"><span style="color:#00cc00">-</span>Progress timeline and food diary review</li>
+          <li style="font-size:13px;color:rgba(255,255,255,.74);padding:7px 0;display:flex;gap:8px"><span style="color:#00cc00">-</span>Renew monthly for a fresh support cycle</li>
         </ul>
         <button onclick="go('#pricing')" class="btn btn-g btn-block" style="border-radius:var(--r2);padding:13px;font-size:14px">Subscribe / Renew Membership</button>
       </div>
@@ -4996,9 +5063,9 @@ body{background:#f7fcf9}
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">How does payment verification work?<div class="fq-ic">+</div></button><div class="fq-ans">After choosing a plan, select Airtel or MTN, send the exact amount to the displayed number, then submit the real transaction reference from your SMS. Your plan unlocks after review and approval.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Why is approval needed before I receive my plan?<div class="fq-ic">+</div></button><div class="fq-ans">Approval protects both the client and Bulamu360. It confirms the payment reference before the personalised guide, download link, or approval code is released.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can Bulamu360 create family or household meal plans?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Household support considers family size, ages, routines, food budget, preferences, health concerns, school or work meals, shared shopping lists, and age-appropriate portions.</div></div>
-        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can I use Bulamu360 if I have diabetes, high blood pressure, kidney concerns, or pregnancy needs?<div class="fq-ic">+</div></button><div class="fq-ans">Yes, but choose the Greenwell Package when a medical condition or life-stage concern needs deeper nutrition safety. Serious symptoms or medication changes should always be handled with your clinician.</div></div>
+        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Can I use Bulamu360 if I have diabetes, high blood pressure, kidney concerns, or pregnancy needs?<div class="fq-ic">+</div></button><div class="fq-ans">Yes, but choose the Specialist Clinical Plan when a medical condition or life-stage concern needs deeper nutrition safety. Serious symptoms or medication changes should always be handled with your clinician.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Will the plan force me to stop eating my usual foods?<div class="fq-ic">+</div></button><div class="fq-ans">No. Bulamu360 focuses on better portions, smarter swaps, preparation methods, balance, and consistency. The goal is progress you can live with, not shame or punishment.</div></div>
-        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Do I need a Banquet Package to use Ask Bulamu Coach or the Meal Analyzer?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Ask Bulamu Coach and the Meal Analyzer are part of the Banquet Package. Once your Advanced payment is approved, these tools stay active for 35 days, then you can renew monthly for continued access.</div></div>
+        <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Do I need an Advanced Nutrition Program to use Ask Bulamu Coach or the Meal Analyzer?<div class="fq-ic">+</div></button><div class="fq-ans">Yes. Ask Bulamu Coach and the Meal Analyzer are part of the Advanced Nutrition Program. Once your Advanced payment is approved, these tools stay active for 35 days, then you can renew monthly for continued access.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Is my health information private?<div class="fq-ic">+</div></button><div class="fq-ans">Bulamu360 collects health information only to prepare your nutrition guidance and manage your order. Use the live secure link for customer submissions, not editable source files.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">Does Bulamu360 use blood type diets?<div class="fq-ic">+</div></button><div class="fq-ans">No. Blood group is not used to decide your diet. Guidance is based on nutrition science, goals, health conditions, medication context, labs where shared, allergies, budget, food access, and safety.</div></div>
         <div class="fq-item"><button class="fq-btn" onclick="toggleFAQ(this)">How do I contact Bulamu360 for help?<div class="fq-ic">+</div></button><div class="fq-ans">You can contact Breyer through the phone and WhatsApp details on the page if you need help with payment, approval codes, plan access, or choosing the right support level.</div></div>
@@ -5077,15 +5144,15 @@ var BULAMU_ENTITLEMENTS = {
   advanced:['templates-section','shopping-list','local-intelligence','food-as-medicine','restaurant-guide','symptom-tracker','emotional-wellness','chat-section','food-analyzer']
 };
 var BULAMU_TOOL_META = {
-  'chat-section':{name:'Ask Bulamu Coach', level:'advanced', cta:'Subscribe / Renew Membership', note:'Ask Bulamu Coach is part of the Banquet Package because personalised questions need more context and ongoing support.'},
-  'food-analyzer':{name:'Meal Analyzer', level:'advanced', cta:'Subscribe / Renew Membership', note:'Meal analysis is part of the Banquet Package because condition-aware food interpretation should use your approved profile.'},
+  'chat-section':{name:'Ask Bulamu Coach', level:'advanced', cta:'Subscribe / Renew Membership', note:'Ask Bulamu Coach is part of the Advanced Nutrition Program because personalised questions need more context and ongoing support.'},
+  'food-analyzer':{name:'Meal Analyzer', level:'advanced', cta:'Subscribe / Renew Membership', note:'Meal analysis is part of the Advanced Nutrition Program because condition-aware food interpretation should use your approved profile.'},
   'templates-section':{name:'Tracking Templates', level:'free', cta:'View Templates', note:'These simple templates can support food, symptom, sleep, hydration, and habit tracking.'},
   'shopping-list':{name:'Shopping Lists', level:'personal', cta:'Choose My Plan', note:'Shopping lists are part of the paid nutrition guidance because they depend on your assessment, budget, household size, and plan.'},
   'local-intelligence':{name:'Local Food Intelligence', level:'personal', cta:'Choose My Plan', note:'Local food guidance becomes more useful when it is connected to your goal, health status, budget, and approved plan.'},
   'food-as-medicine':{name:'Food as Medicine', level:'personal', cta:'Choose My Plan', note:'Food-as-medicine guidance is educational and should be personalised carefully, especially where health conditions are involved.'},
   'restaurant-guide':{name:'Restaurant Guide', level:'personal', cta:'Choose My Plan', note:'Restaurant guidance is included with paid support so it can reflect your health priorities and plan.'},
-  'symptom-tracker':{name:'Symptom Tracker', level:'specialist', cta:'Choose Greenwell', note:'Symptom review can involve medical risk. The deeper tracker is best used with Specialist or Advanced support.'},
-  'emotional-wellness':{name:'Emotional Wellness', level:'advanced', cta:'Subscribe / Renew Membership', note:'Emotional nutrition support is part of the Banquet Package because it needs more ongoing context and follow-up.'}
+  'symptom-tracker':{name:'Symptom Tracker', level:'specialist', cta:'Choose Specialist Support', note:'Symptom review can involve medical risk. The deeper tracker is best used with Specialist or Advanced support.'},
+  'emotional-wellness':{name:'Emotional Wellness', level:'advanced', cta:'Subscribe / Renew Membership', note:'Emotional nutrition support is part of the Advanced Nutrition Program because it needs more ongoing context and follow-up.'}
 };
 
 // Public backend used for customer orders, approvals, downloads, and email.
@@ -5362,7 +5429,7 @@ function showLockedTool(featureId){
   var meta = BULAMU_TOOL_META[featureId] || {name:'This tool', level:'personal', cta:'Choose My Plan', note:'This feature unlocks after the right plan is approved.'};
   var panel = document.getElementById('tool-lock-panel');
   if(!panel) return;
-  var levelText = meta.level === 'advanced' ? 'the Banquet Package' : meta.level === 'specialist' ? 'Greenwell or Banquet' : 'Pantry, Greenwell or Banquet';
+  var levelText = meta.level === 'advanced' ? 'the Advanced Nutrition Program or a Banquet subscription' : meta.level === 'specialist' ? 'a Specialist or Advanced plan, or a Greenwell or Banquet subscription' : 'any paid plan or subscription';
   var status = window.BULAMU_MEMBER_STATUS || {};
   var approvedText = status.loggedIn
     ? 'Your member status is <strong>' + (status.statusLabel || 'being reviewed') + '</strong>' + (status.packageName ? ' for <strong>' + status.packageName + '</strong>.' : '.')
@@ -5488,18 +5555,24 @@ function toggleSection(secId, btnId){
 /* PRICING RENDER */
 window.onload = function(){
   var pkgs = [
-    {tier:'Pantry Package', val:'75K', suf:'', per:'per month · cancel any time', badge:'Most Popular',
-     desc:'Your personal nutrition plan plus the everyday tools to follow it.',
-     inc:['Personal 30-day meal plan from your assessment','Food diary with trends, fasting and cycle tracking','All tracking templates (PDF)','Shopping lists, local foods, food as medicine and eating-out guides','30-day PDF reports'],
-     why:'Best first choice: clear direction and practical tools.', cta:'Start with Pantry', best:true},
-    {tier:'Greenwell Package', val:'150K', suf:'', per:'per month', badge:'Clinical Care',
-     desc:'For health conditions, pregnancy, children and teens, reviewed carefully by Breyer.',
-     inc:['Everything in Pantry','Condition-aware clinical plan with safety checks','Full nutrient analysis in your account','Care team: share your tracker and message Breyer','Symptom tracker'],
-     why:'For food choices that need more care and precision.', cta:'Choose Greenwell', best:false},
-    {tier:'Banquet Package', val:'250K', suf:'', per:'per month', badge:'Everything Included',
-     desc:'Every Bulamu360 tool, deeper coaching and ongoing support.',
-     inc:['Everything in Greenwell','Ask Bulamu Coach and the smart Assistant','Meal Analyzer and emotional wellness support','Zipped folder of every tracking template','Priority progress reviews'],
-     why:'The full experience, renewed each month.', cta:'Choose Banquet', best:false}
+    {tier:'Bulamu Personal Nutrition Plan', val:'70K', suf:'',
+     per:'individual plan; household priced by family size',
+     badge:'Most Popular',
+     desc:'The flagship plan for most clients who want clear nutrition direction without clinical complexity.',
+     inc:['Who it is for: everyday weight goals, energy, wellness, and practical family food decisions','What you receive: health snapshot, 30-day food plan, portions, swaps, shopping list, restaurant guide, food-as-medicine guide, and local market intelligence','After payment: submit your reference, wait for review, then unlock your approved guide','Why it is popular: it gives enough structure for real life without overwhelming you. Household pricing starts at 3 members: UGX 200,000'],
+     why:'Best first choice for most clients because it balances value, clarity, and practical follow-through.', best:true},
+    {tier:'Specialist Clinical Plan', val:'120K', suf:'+',
+     per:'based on assessment complexity',
+     badge:'Clinical Review',
+     desc:'For chronic disease, lab concerns, pregnancy, child or teen nutrition, and life-stage needs that require more careful food decisions.',
+     inc:['Who it is for: diabetes, blood pressure, cholesterol, kidney support, PMOS, gut issues, anaemia, thyroid, pregnancy, child and teen needs','What you receive: everything in Personal, plus condition-aware guidance, safety-gate awareness, and a 30 to 60 day clinical structure','After payment: Breyer reviews the request before the guide is released','Why choose it: safer limits, clearer clinical wording, and more careful food decisions'],
+     why:'Designed for people whose nutrition choices need more caution, context, and precision.', best:false},
+    {tier:'Advanced Nutrition Program', val:'200K', suf:'+',
+     per:'35-day membership cycle; renew monthly',
+     badge:'Deep Support',
+     desc:'A premium 35-day membership cycle for clients who want deeper personalisation, behaviour support, progress review, and guided nutrition tools.',
+     inc:['Who it is for: clients who want stronger accountability, habit support, and more ongoing guidance','What you receive: everything in Personal, plus emotional nutrition coach, Ask Bulamu Coach, meal analysis, symptom tracker, food diary, and progress support','After payment: approval activates Advanced member access for 35 days','Renewal: renew monthly when you want continued tools, plan updates, and follow-up support'],
+     why:'Most desirable for clients who want more than a plan: support, coaching tools, and a renewable 35-day guidance cycle.', cta:'Subscribe / Renew Membership', best:false}
   ];
   document.getElementById('priceGrid').innerHTML = pkgs.map(function(p){
     return '<div class="pcard' + (p.best ? ' best' : '') + '">' +
@@ -7605,40 +7678,40 @@ function buildPkgs(){
     var famPrice = householdPlanPrice(famCount);
     if(!famPrice){
       return [
-        {name:'Pantry Package - Household Custom Quote', price:0, priceLabel:'Contact Bulamu', desc:'Households of 6 or more receive a custom quote so member needs, health concerns, shared meals, portions, rotations, and shopping quantities can be planned properly.'}
+        {name:'Bulamu Personal Nutrition Plan - Household Custom Quote', price:0, priceLabel:'Contact Bulamu', desc:'Households of 6 or more receive a custom quote so member needs, health concerns, shared meals, portions, rotations, and shopping quantities can be planned properly.'}
       ];
     }
     return [
-      {name:'Pantry Package - Household (' + famCount + ' members)', price:famPrice, desc:'Household nutrition inside the personal plan: member details, shared meal planning, age-specific portions, family rotations, and shopping lists scaled for ' + famCount + ' people.'}
+      {name:'Bulamu Personal Nutrition Plan - Household (' + famCount + ' members)', price:famPrice, desc:'Household nutrition inside the personal plan: member details, shared meal planning, age-specific portions, family rotations, and shopping lists scaled for ' + famCount + ' people.'}
     ];
   }
   if(ST.plantype === 'child' || ST.goal === 'child') return [
-    {name:'Greenwell Package - Child', price:150000, desc:'UGX 150,000 a month. paediatric nutrition with growth monitoring, school-food guidance, caregiver instructions, and safety notes.'}
+    {name:'Specialist Clinical Plan - Child', price:120000, desc:'UGX 120,000+ paediatric nutrition with growth monitoring, school-food guidance, caregiver instructions, and safety notes.'}
   ];
   if(ST.plantype === 'teen') return [
-    {name:'Greenwell Package - Teen', price:150000, desc:'UGX 150,000 a month. adolescent nutrition for growth, hormonal health, energy, sports performance, and academic focus.'}
+    {name:'Specialist Clinical Plan - Teen', price:120000, desc:'UGX 120,000+ adolescent nutrition for growth, hormonal health, energy, sports performance, and academic focus.'}
   ];
   if(ST.goal === 'prenatal') return [
-    {name:'Greenwell Package - Pregnancy', price:150000, desc:'UGX 150,000 a month. pregnancy nutrition with trimester-specific meal guidance, micronutrient priorities, and safety notes.'}
+    {name:'Specialist Clinical Plan - Pregnancy', price:120000, desc:'UGX 120,000+ pregnancy nutrition with trimester-specific meal guidance, micronutrient priorities, and safety notes.'}
   ];
   if(isComp) return [
-    {name:'Greenwell Package', price:150000, desc:'UGX 150,000 a month. clinical dietary plan tailored to your condition(s), labs, symptoms, contraindications, and 30 to 60 day structure.'}
+    {name:'Specialist Clinical Plan', price:120000, desc:'UGX 120,000+ clinical dietary plan tailored to your condition(s), labs, symptoms, contraindications, and 30 to 60 day structure.'}
   ];
   if(ST.activity === 'active') return [
-    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship plan with sports-aware fuelling, recovery meals, protein targets, hydration, and progress tracking.'},
-    {name:'Banquet Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, performance nutrition, habit coaching, progress review, and ongoing personalisation.'}
+    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship plan with sports-aware fuelling, recovery meals, protein targets, hydration, and progress tracking.'},
+    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, performance nutrition, habit coaching, progress review, and ongoing personalisation.'}
   ];
   if(ST.bmi >= 18.5 && ST.bmi < 25) return [
-    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship 30-day plan for energy, immunity, gut health, food rhythm, portions, and practical everyday eating.'},
-    {name:'Banquet Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, deeper personalisation, progress review, and long-term habit change.'}
+    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship 30-day plan for energy, immunity, gut health, food rhythm, portions, and practical everyday eating.'},
+    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, deeper personalisation, progress review, and long-term habit change.'}
   ];
   if(ST.bmi < 18.5) return [
-    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Structured weight-gain plan with progressive calories, protein targets, deficiency-aware foods, and practical portions.'},
-    {name:'Banquet Package', price:250000, desc:'UGX 250,000 a month. Everything included: premium tools, appetite, energy, symptoms, progress review, and sustained weight restoration.'}
+    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 structured weight-gain plan with progressive calories, protein targets, deficiency-aware foods, and practical portions.'},
+    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for premium tools, appetite, energy, symptoms, progress review, and sustained weight restoration.'}
   ];
   return [
-    {name:'Pantry Package', price:75000, desc:'UGX 75,000 a month. Flagship 30-day plan with weekly progression, macro targets, micronutrient priorities, portions, local foods, and shopping guidance.'},
-    {name:'Banquet Package', price:250000, desc:'UGX 250,000 a month. Everything included: clients who want extended guidance, deeper personalisation, premium tools, and progress review.'}
+    {name:'Bulamu Personal Nutrition Plan', price:70000, desc:'UGX 70,000 flagship 30-day plan with weekly progression, macro targets, micronutrient priorities, portions, local foods, and shopping guidance.'},
+    {name:'Advanced Nutrition Program', price:200000, desc:'UGX 200,000+ 35-day membership access for clients who want extended guidance, deeper personalisation, premium tools, and progress review.'}
   ];
 }
 
@@ -11151,7 +11224,7 @@ function showMedicineDetail(idx){
    PREMIUM CHAT MODAL
 ============================================= */
 function openPremiumChat(){
-  alert('Banquet Package is the Bulamu360 membership. Choose the Banquet Package, submit your Mobile Money reference, and after approval your premium tools stay active for 35 days. Renew monthly when you want continued access.');
+  alert('Advanced Nutrition Program is the Bulamu360 membership. Choose the Advanced plan, submit your Mobile Money reference, and after approval your premium tools stay active for 35 days. Renew monthly when you want continued access.');
 }
 
 
@@ -15746,7 +15819,7 @@ function plan(){ return (A.user && A.user.plan) || { level:'free', tier:'Free', 
 function has(level){ return RANK[plan().level] >= RANK[level]; }
 A.plan = plan; A.has = has;
 function canTemplate(id){ var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0]; var p = plan(); return !!t && (!t[3] || p.allTemplates || (p.templates || []).indexOf(id) > -1); }
-function goPricing(){ try { B.app.close(); } catch (e) {} setTimeout(function(){ if (typeof window.go === 'function') window.go('#pricing'); else location.hash = '#pricing'; }, 80); }
+function goPricing(){ try { B.app.close(); } catch (e) {} setTimeout(function(){ if (typeof window.go === 'function') window.go('#subscriptions'); else location.hash = '#subscriptions'; }, 80); }
 function refreshMember(){ try { if (typeof window.getMemberStatus === 'function') window.getMemberStatus(true); } catch (e) {} }
 
 /* ---------- Refresh the plan after sign-in ---------- */
@@ -15762,10 +15835,10 @@ Object.keys(NEEDS).forEach(function(id){
     var lvl = NEEDS[id], name = (B.app.VIEWS.filter(function(v){ return v[0] === id; })[0] || [0, 'This page'])[1];
     main.innerHTML = B.viewHead(name, '') +
       '<section class="b-panel b3-upsell"><div class="b-panel-body">' +
-        '<div class="b3-upsell-badge">' + TIER[lvl] + ' package</div>' +
+        '<div class="b3-upsell-badge">' + TIER[lvl] + ' subscription</div>' +
         '<h2>' + U.esc(name) + ' opens with ' + TIER[lvl] + (lvl === 'advanced' ? '' : ' or higher') + '</h2>' +
-        '<p>' + TIER[lvl] + ' is ' + PRICE[lvl] + ' a month and includes your personalised meal plan. Already paid? Link your purchase in My account.</p>' +
-        '<div class="b-row"><button type="button" class="b-btn b-btn-primary" data-up>See the packages</button><button type="button" class="b-btn" data-link>Link a purchase</button></div>' +
+        '<p>' + TIER[lvl] + ' is ' + PRICE[lvl] + ' a month (a monthly subscription, separate from meal plans). Already paid? Link your purchase in My account.</p>' +
+        '<div class="b-row"><button type="button" class="b-btn b-btn-primary" data-up>See subscriptions</button><button type="button" class="b-btn" data-link>Link a purchase</button></div>' +
       '</div></section>';
     main.querySelector('[data-up]').onclick = goPricing;
     main.querySelector('[data-link]').onclick = function(){ B.app.go ? B.app.go('data') : B.app.open('data'); };
@@ -15798,14 +15871,25 @@ window.downloadTemplate = function(type){
 };
 A.downloadZip = function(){ return fetchFile('/api/templates/all.zip', 'Bulamu360-Tracking-Templates.zip').then(function(){ toast('All templates downloaded (.zip).'); }).catch(function(err){ toast(err.message, true); }); };
 
+var SUBS = { pantry:['Pantry', 'UGX 75,000', 'personal'], greenwell:['Greenwell', 'UGX 150,000', 'specialist'], banquet:['Banquet', 'UGX 250,000', 'advanced'] };
 function buyTemplate(id){
   var t = TEMPLATES.filter(function(x){ return x[0] === id; })[0]; if (!t) return;
+  buy({ tag:'Printable PDF', title:t[1], price:'UGX 7,000', per:'one-off', note:'Free with any meal plan or subscription.', unlock:t[1] + ' unlocks in your account', body:{ kind:'template', templateId:id } });
+}
+function subscribe(tier){
+  var x = SUBS[tier]; if (!x) return;
+  if (!A.user) { A.pending = 'data'; B.app.open('data'); toast('Create a free account or sign in first, then subscribe.'); return; }
+  buy({ tag:'Monthly subscription', title:x[0], price:x[1], per:'per month', note:'Separate from your meal plan. Renew each month to keep the tools open.', unlock:'your ' + x[0] + ' tools open in your account for a month', body:{ kind:'subscription', tier:tier } });
+}
+A.subscribe = subscribe;
+document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('[data-subscribe]'); if (b) { e.preventDefault(); subscribe(b.getAttribute('data-subscribe')); } });
+function buy(o){
   var u = A.user || {};
   var d = U.h('div', { class:'b3-buy', role:'dialog', 'aria-modal':'true', 'aria-labelledby':'b3-buy-t' });
   d.innerHTML = '<form class="b3-buy-card"><button type="button" class="b3-buy-x" data-x aria-label="Close">✕</button>' +
-    '<div class="b3-buy-tag">Printable PDF</div><h3 id="b3-buy-t">' + U.esc(t[1]) + '</h3><p class="b3-buy-price">UGX 7,000 <span>one-off</span></p>' +
-    '<p class="b3-buy-note">Free with Pantry, Greenwell or Banquet. <a href="#pricing" data-pk>See packages</a></p>' +
-    '<ol class="b3-buy-steps"><li>Send <b>UGX 7,000</b> by <b>MTN MoMo</b> to <b>+256 791 790 934</b> or <b>Airtel Money</b> to <b>+256 704 392 545</b>.</li><li>Enter the transaction reference from the SMS below.</li><li>Breyer approves it and the template unlocks in your account.</li></ol>' +
+    '<div class="b3-buy-tag">' + U.esc(o.tag) + '</div><h3 id="b3-buy-t">' + U.esc(o.title) + '</h3><p class="b3-buy-price">' + U.esc(o.price) + ' <span>' + U.esc(o.per) + '</span></p>' +
+    '<p class="b3-buy-note">' + U.esc(o.note) + ' <a href="#subscriptions" data-pk>See subscriptions</a></p>' +
+    '<ol class="b3-buy-steps"><li>Send <b>' + U.esc(o.price) + '</b> by <b>MTN MoMo</b> to <b>+256 791 790 934</b> or <b>Airtel Money</b> to <b>+256 704 392 545</b>.</li><li>Enter the transaction reference from the SMS below.</li><li>Breyer approves it and ' + U.esc(o.unlock) + '.</li></ol>' +
     '<label>Phone number<input name="phone" required inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX"></label>' +
     '<label>Network<select name="network"><option value="MTN MoMo">MTN MoMo</option><option value="Airtel Money">Airtel Money</option></select></label>' +
     '<label>Transaction reference<input name="txRef" required minlength="6" autocomplete="off" placeholder="From the payment SMS"></label>' +
@@ -15821,9 +15905,9 @@ function buyTemplate(id){
   form.onsubmit = function(e){
     e.preventDefault(); err.hidden = true;
     var btn = form.querySelector('.b3-buy-go'); btn.disabled = true; btn.textContent = 'Sending…';
-    fetch('/api/orders', { method:'POST', credentials:'same-origin', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ kind:'template', templateId:id, name:u.name, email:u.email, phone:form.phone.value.trim(), network:form.network.value, txRef:form.txRef.value.trim(), profile:{} }) })
+    fetch('/api/orders', { method:'POST', credentials:'same-origin', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(Object.assign({ name:u.name, email:u.email, phone:form.phone.value.trim(), network:form.network.value, txRef:form.txRef.value.trim(), profile:{} }, o.body)) })
       .then(function(r){ return r.json().then(function(j){ if (!r.ok || !j.ok) throw new Error(j.error || 'Could not send.'); return j; }); })
-      .then(function(){ form.innerHTML = '<div class="b3-buy-done"><div class="b3-buy-tick">✓</div><h3>Reference received</h3><p>Once Breyer approves your payment, <b>' + U.esc(t[1]) + '</b> unlocks in your account and we email you.</p><button type="button" class="b3-buy-go" data-x>Done</button></div>'; form.querySelector('[data-x]').onclick = close; })
+      .then(function(){ form.innerHTML = '<div class="b3-buy-done"><div class="b3-buy-tick">✓</div><h3>Reference received</h3><p>Once Breyer approves your payment, ' + U.esc(o.unlock) + ' and we email you.</p><button type="button" class="b3-buy-go" data-x>Done</button></div>'; form.querySelector('[data-x]').onclick = close; })
       .catch(function(x){ err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Submit payment reference'; });
   };
 }
@@ -15857,9 +15941,9 @@ B.app.views.data = function(main){
   var p = plan(), lvl = p.level;
   var sec = U.h('section', { class:'b-panel b3-plan b3-plan-' + lvl });
   sec.innerHTML = '<div class="b-panel-body">' +
-    '<div class="b3-plan-top"><div><div class="b3-plan-lbl">Your package</div><div class="b3-plan-name">' + TIER[lvl] + '</div>' +
+    '<div class="b3-plan-top"><div><div class="b3-plan-lbl">Your subscription</div><div class="b3-plan-name">' + TIER[lvl] + '</div>' +
     '<div class="b3-plan-sub">' + (lvl === 'free' ? 'Free account' : 'Active until ' + U.esc(p.activeUntil || '') + (p.daysRemaining ? ' · ' + p.daysRemaining + ' days left' : '')) + '</div></div>' +
-    (lvl !== 'advanced' ? '<button type="button" class="b-btn b-btn-primary b-btn-sm" data-up>' + (lvl === 'free' ? 'Choose a package' : 'Upgrade') + '</button>' : '') + '</div>' +
+    (lvl !== 'advanced' ? '<button type="button" class="b-btn b-btn-primary b-btn-sm" data-up>' + (lvl === 'free' ? 'Subscribe' : 'Upgrade') + '</button>' : '') + '</div>' +
     '<ul class="b3-plan-list">' +
       ['Diary, dashboard, foods, biometrics, targets|free', 'Trends, fasting, cycle, 30-day reports, all templates|personal', 'Nutrient analysis, care team, symptom tracker|specialist', 'Assistant, Ask Coach, Meal Analyzer, template .zip|advanced']
         .map(function(x){ var a = x.split('|'); return '<li class="' + (has(a[1]) ? 'on' : 'off') + '"><span>' + (has(a[1]) ? '✓' : '🔒') + '</span>' + a[0] + ' <em>' + TIER[a[1]] + '</em></li>'; }).join('') +
@@ -16014,8 +16098,8 @@ function sleepChart(rows){
 }
 B.app.views.sleep = function(main){
   if (!A.has('personal')) {
-    main.innerHTML = B.viewHead('Sleep', '') + '<section class="b-panel b3-upsell"><div class="b-panel-body"><div class="b3-upsell-badge">Pantry package</div><h2>Track your sleep in a graph</h2><p>Log your hours and sleep quality each day and see your pattern over two or four weeks. Included with Pantry, Greenwell and Banquet.</p><div class="b-row"><button type="button" class="b-btn b-btn-primary" data-up>See the packages</button></div></div></section>';
-    main.querySelector('[data-up]').onclick = function(){ try { B.app.close(); } catch (e) {} setTimeout(function(){ if (window.go) window.go('#pricing'); }, 80); };
+    main.innerHTML = B.viewHead('Sleep', '') + '<section class="b-panel b3-upsell"><div class="b-panel-body"><div class="b3-upsell-badge">Pantry subscription</div><h2>Track your sleep in a graph</h2><p>Log your hours and sleep quality each day and see your pattern over two or four weeks. Included with the Pantry, Greenwell and Banquet subscriptions.</p><div class="b-row"><button type="button" class="b-btn b-btn-primary" data-up>See subscriptions</button></div></div></section>';
+    main.querySelector('[data-up]').onclick = function(){ try { B.app.close(); } catch (e) {} setTimeout(function(){ if (window.go) window.go('#subscriptions'); }, 80); };
     return;
   }
   var st = B.app.views.sleep.st = B.app.views.sleep.st || { n:14 };
