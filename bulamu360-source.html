@@ -2039,6 +2039,7 @@ section.s-parch,section.s-cream,section.s-linen,section.s-dark{padding-top:54px!
 @media(max-width:600px){.nav-logo{height:34px}.nav-logo-chip{padding:4px 9px;border-radius:10px}.foot-logo{height:54px}}
 </style>
 <!-- B360:BRANDCSS:END -->
+
 <!-- B360:STYLE:START -->
 <style id="b360-style">
 /* =====================================================================
@@ -3257,6 +3258,7 @@ body{background:#f7fcf9}
           <a href="#faq">FAQs <small>Quick help and next steps</small></a>
         </div>
       </div>
+
 <!-- B360:NAV:START -->
       <a href="#signin" class="b360-nav-link" data-b360-open="diary">Sign in</a>
 <!-- B360:NAV:END -->
@@ -3320,6 +3322,7 @@ body{background:#f7fcf9}
       <a href="#faq" onclick="closeMob()">FAQ</a>
     </div>
   </details>
+
 <!-- B360:MNAV:START -->
   <a href="#signin" class="b360-nav-link" data-b360-open="diary" onclick="closeMob()">Sign in</a>
 <!-- B360:MNAV:END -->
@@ -3351,6 +3354,7 @@ body{background:#f7fcf9}
 <!-- B360:HEROBTN:START -->
         <button class="btn btn-ghost btn-lg b360-hero-track" type="button" data-b360-open="diary">Track My Food, Free</button>
 <!-- B360:HEROBTN:END -->
+
         <button class="btn btn-ghost btn-lg" onclick="go('#how')">See How It Works</button>
       </div>
       <div class="hero-trust-strip">
@@ -4355,6 +4359,8 @@ body{background:#f7fcf9}
     <div class="plan-grid" id="planCards"></div>
   </div>
 </section>
+
+
 <!-- B360:LAUNCH:START -->
 <section id="b360-launch" aria-labelledby="b360-launch-title">
   <div class="wrap b3l-grid">
@@ -5091,6 +5097,8 @@ window.BULAMU_MEMBER_STATUS = null;
 window.BULAMU_MEMBER_STATUS_PROMISE = null;
 
 function apiPath(path){
+  // On the live site (any domain), talk to the same server that served the page.
+  if(/^https?:$/.test(location.protocol)) return path;
   var base = (window.BULAMU_API_BASE || '').replace(/\/+$/,'');
   if(base) return base + path;
   if(location.protocol === 'file:') return 'https://bulamu360-backend.onrender.com' + path;
@@ -11606,6 +11614,8 @@ function buildNutritionMemory(){
     <div class="pay-step" id="pstep4">Almost done</div>
   </div>
 </div>
+
+
 <!-- B360:APP:START -->
 <div id="b360" class="b360" hidden></div>
 <script id="b360-script">
