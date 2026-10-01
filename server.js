@@ -2094,6 +2094,61 @@ function shoppingItemLabel(item) {
   return labels[item] || item;
 }
 
+/* B360 SHOPPING FROM MEALS */
+const SHOP_SKIP = /^(.*\bwater|ice|salt to taste)$/;
+const SHOP_WORDS = /\b(boiled|steamed|roasted|grilled|fried|stewed|cooked|chopped|sliced|diced|mashed|grated|fresh|plain|small|medium|large|ripe|raw|lean|skinless|whole|light|lightly|unsweetened|low[- ]fat|optional|handful|cup|cups|tablespoons?|teaspoons?|tbsp|tsp|pinch|piece|pieces|of|a|some|little|measured|portion|for serving|to taste)\b/g;
+const SHOP_ALIAS = [
+  [/^oil$|cooking oil|vegetable oil|olive oil/, 'cooking oil'], [/sweet ?potato/, 'sweet_potato'], [/yog(h)?urt/, 'yogurt'], [/\beggs?\b/, 'eggs'], [/tilapia/, 'tilapia'], [/silverfish|mukene/, 'mukene'],
+  [/g(round)?nut|peanut/, 'groundnuts'], [/\boats?\b/, 'oats'], [/millet/, 'millet'], [/lemon/, 'lemon'], [/avocado/, 'avocado'],
+  [/\bbeans?\b|cowpea/, 'beans'], [/cabbage/, 'cabbage'], [/carrot/, 'carrot'], [/\bdodo\b|amaranth/, 'dodo'], [/nakati/, 'nakati'],
+  [/garlic/, 'garlic'], [/ginger/, 'ginger'], [/onion/, 'onion'], [/pumpkin/, 'pumpkin'], [/tomato/, 'tomato'], [/chicken/, 'chicken'], [/cucumber/, 'cucumber']
+];
+const SHOP_CATS = [
+  ['Proteins', /beans|cowpea|\bpeas?\b|lentil|egg|tilapia|fish|mukene|silverfish|chicken|beef|goat|meat|liver|soy|groundnut|peanut|nile perch|sardine|tuna|turkey|offal/],
+  ['Dairy', /milk|yogurt|yoghurt|cheese|ghee|maziwa/],
+  ['Vegetables', /dodo|nakati|sukuma|cabbage|carrot|tomato|onion|cucumber|pumpkin|eggplant|aubergine|spinach|greens|green pepper|bell pepper|okra|entula|mushroom|lettuce|kale|beetroot|courgette|zucchini|celery|leek|broccoli|cauliflower|malakwang|bugga|doodo|vegetable/],
+  ['Fruit', /banana|mango|pawpaw|papaya|orange|pineapple|passion|watermelon|apple|jackfruit|avocado|guava|tangerine|berries|fruit|lime|dates/],
+  ['Staples and grains', /matooke|rice|posho|maize|corn|cassava|potato|millet|sorghum|oats|bread|chapati|yam|pasta|noodle|flour|kalo|wheat|cereal|plantain|gonja/],
+  ['Flavour and pantry', /garlic|ginger|lemon|salt|pepper|spice|curry|oil|herb|cinnamon|honey|tea|coriander|dhania|rosemary|turmeric|vinegar|sesame|simsim|seed|stock|masala|paprika|chilli|cumin|cocoa|sugar|mint|basil|parsley|thyme|bay leaf/]
+];
+function shoppingKey(raw) {
+  let t = String(raw || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[0-9]+(\.[0-9]+)?\s*(g|kg|ml|l|grams?)?/g, ' ').replace(SHOP_WORDS, ' ').replace(/[^a-z\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || SHOP_SKIP.test(t)) return null;
+  for (const [re, key] of SHOP_ALIAS) if (re.test(t)) return key;
+  return (t.length > 4 && /[^su]s$/.test(t) ? t.slice(0, -1) : t).trim() || t;
+}
+function shoppingCategory(key) {
+  const k = String(key).replace('_', ' ');
+  for (const [name, re] of SHOP_CATS) if (re.test(k)) return name;
+  return 'Other';
+}
+function mealsShoppingWeeks(weekBlocks = [], profile = {}, count = 1) {
+  const slots = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+  return weekBlocks.map((week, wi) => {
+    const tally = new Map();
+    (week.days || []).forEach(day => slots.forEach(slot => {
+      const recipe = day && day[slot]; if (!recipe) return;
+      const seenInMeal = new Set();
+      (recipe.ingredients || []).forEach(ing => {
+        const key = shoppingKey(ing); if (!key || seenInMeal.has(key)) return;
+        seenInMeal.add(key);
+        const cur = tally.get(key) || { key, meals: 0 };
+        cur.meals += 1; tally.set(key, cur);
+      });
+    }));
+    const groups = {};
+    [...tally.values()].sort((a, b) => b.meals - a.meals || a.key.localeCompare(b.key)).forEach(item => {
+      const cat = shoppingCategory(item.key);
+      const known = shoppingItemQty(item.key, count, profile);
+      const qty = known === (count > 1 ? 'family quantity' : 'single-person quantity')
+        ? (count > 1 ? `enough for ${item.meals} meal${item.meals === 1 ? '' : 's'} x ${count} people` : `enough for ${item.meals} meal${item.meals === 1 ? '' : 's'}`)
+        : known;
+      (groups[cat] = groups[cat] || []).push([shoppingItemLabel(item.key), qty, item.meals]);
+    });
+    const order = ['Proteins', 'Vegetables', 'Fruit', 'Staples and grains', 'Dairy', 'Flavour and pantry', 'Other'];
+    return { title: String(week.title || ('Week ' + (wi + 1))).split(' - ')[0], groups: order.filter(c => groups[c] && groups[c].length).map(c => [c, groups[c]]), total: tally.size };
+  });
+}
 function planShoppingWeeks(profile = {}, count = 1) {
   const condText = JSON.stringify(profile || {}).toLowerCase();
   const kidney = condText.includes('kidney') || condText.includes('egfr') || condText.includes('creatinine');
@@ -2167,7 +2222,8 @@ function weeklyShoppingMealPrepSection(payload = {}, profile = {}) {
   const scaleNote = family
     ? `For this household, multiply most vegetable portions by about ${multiplier}; scale protein by palm-size portions per person; reduce toddler portions and increase active teen/adult portions.`
     : 'For one person, cook two to three base foods at a time so the plan stays realistic without eating the same meal every day.';
-  const shoppingWeeks = planShoppingWeeks(profile, count).map(week => `<div class="week-card"><div class="week-head"><div class="week-title">${escapeHtml(week.title)} Market List</div><div class="week-focus">Starting quantities. Adjust after taste, budget, symptoms, and leftovers are reviewed.</div></div><div class="day-block"><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${week.items.map(([item, qty]) => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(item)}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(qty)}</td></tr>`).join('')}</tbody></table></div></div>`).join('');
+  const mealWeeks = Array.isArray(payload.__weekBlocks) && payload.__weekBlocks.length ? mealsShoppingWeeks(payload.__weekBlocks, profile, count) : null;
+  const shoppingWeeks = mealWeeks ? mealWeeks.map(week => `<div class="week-card shop-week"><div class="week-head"><div class="week-title">${escapeHtml(week.title)} Shopping List</div><div class="week-focus">Every food used in your ${escapeHtml(week.title)} meals (${week.total} items). Tick items off as you shop; adjust for what is already at home.</div></div>${week.groups.map(([cat, items]) => `<div class="shop-group"><h4 class="shop-cat">${escapeHtml(cat)}</h4><table class="shop-table"><thead><tr><th>Item</th><th>Quantity</th><th>Used in</th></tr></thead><tbody>${items.map(([item, qty, meals]) => `<tr><td><strong>${escapeHtml(item)}</strong></td><td>${escapeHtml(qty)}</td><td>${meals} meal${meals === 1 ? '' : 's'}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`).join('') : planShoppingWeeks(profile, count).map(week => `<div class="week-card"><div class="week-head"><div class="week-title">${escapeHtml(week.title)} Market List</div><div class="week-focus">Starting quantities. Adjust after taste, budget, symptoms, and leftovers are reviewed.</div></div><div class="day-block"><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${week.items.map(([item, qty]) => `<tr><td style="padding:8px;border-bottom:1px solid #eee6dc"><strong>${escapeHtml(item)}</strong></td><td style="padding:8px;border-bottom:1px solid #eee6dc">${escapeHtml(qty)}</td></tr>`).join('')}</tbody></table></div></div>`).join('');
   return `<div class="sec"><div class="sh"><div class="si o">SHOP</div><div><div class="st">Weekly Shopping and Meal Prep Guide</div><div class="subtle">This turns the plan from a document into food that can actually happen.</div></div></div>
     <div class="support-grid">
       ${basket.map(([title, item]) => `<div class="info-card"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(item)}</p></div>`).join('')}
@@ -2478,7 +2534,7 @@ function backendPlanHtml(payload = {}, clinicalSummary = {}) {
   html += mealProgrammeHtml;
   html += patientPreMealExpertSections(payload, profile, clinicalSummary, macros);
   html += familyPlanSectionHtml(payload, profile);
-  html += patientValueSupportSections(payload, profile, clinicalSummary, macros);
+  html += patientValueSupportSections({ ...payload, __weekBlocks: weekBlocks }, profile, clinicalSummary, macros);
   html += `<div class="sec"><div class="footer-note">Bulamu360 plans are personalised nutrition support documents. They do not replace medical diagnosis, emergency care, prescribed medicine, or direct care from a qualified clinician.</div></div>`;
   html += `</div><div class="foot"><div class="fi"><div><div class="fb">Bulamu360 by Breyer Naula, RDN</div><div class="fc">Certified Registered Dietician and Nutritionist</div><div class="fc">breyernaula5@gmail.com &nbsp;|&nbsp; +256 704392545 &nbsp;|&nbsp; Uganda</div><div class="fd">All nutritional guidance is prepared as professional dietary support based on submitted information. This plan does not replace in-person medical diagnosis, emergency care, prescribed medicine, or direct care from a qualified clinician.</div></div><div class="fr"><div class="fdt">Issued: ${escapeHtml(issued)}</div><div class="ftag">Your personal nutrition coach, anytime.</div></div></div></div><div class="prtbtn"><button onclick="window.print()" style="background:linear-gradient(135deg,#1e3a1a,#3d7a30);color:#fff;border:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;box-shadow:0 6px 18px rgba(30,58,26,.3)">Print or Save as PDF</button><p style="margin-top:8px;font-size:11px;color:#8a7a68">Use your browser Print function and choose Save as PDF as the destination.</p></div></div></body></html>`;
   return html;
