@@ -3776,8 +3776,8 @@ function memberLoginPage(message = '') {
 function memberLevelFromPackage(packageName = '') {
   const name = String(packageName || '').toLowerCase();
   if (name.startsWith('template')) return 'free';
-  if (name.includes('feast')) return 'advanced';
-  if (name.includes('banquet')) return 'specialist';
+  if (name.includes('banquet') || name.includes('feast')) return 'advanced';
+  if (name.includes('greenwell')) return 'specialist';
   if (name.includes('pantry')) return 'personal';
   if (name.includes('advanced') || name.includes('program') || name.includes('200')) return 'advanced';
   if (name.includes('specialist') || name.includes('clinical') || name.includes('120')) return 'specialist';
@@ -3853,7 +3853,7 @@ function memberAccessStatus(req) {
     if (acct) {
       const p = accountPlan(adb, acct);
       return { ok: true, loggedIn: true, active: p.level !== 'free', email: acct.email, name: acct.name, level: p.level, tier: p.tier, packageName: p.packageName,
-        statusLabel: p.level !== 'free' ? 'Active' : 'Free account', detail: p.level !== 'free' ? `${p.tier} package is active until ${p.activeUntil}.` : 'Choose Pantry, Banquet or Feast to unlock more tools.',
+        statusLabel: p.level !== 'free' ? 'Active' : 'Free account', detail: p.level !== 'free' ? `${p.tier} package is active until ${p.activeUntil}.` : 'Choose Pantry, Greenwell or Banquet to unlock more tools.',
         activeUntil: p.activeUntil, daysRemaining: p.daysRemaining, renewalReminder: '', renewalDue: false, templates: p.templates, allTemplates: p.allTemplates, templateZip: p.templateZip };
     }
     return {
@@ -5965,7 +5965,7 @@ function accountCookie(token, maxAgeSec) {
 function publicUser(u, db) { return { id: u.id, name: u.name, email: u.email, newsletter: Boolean(u.newsletter), createdAt: u.createdAt, trackerSavedAt: u.tracker ? u.tracker.savedAt : null, plan: db ? accountPlan(db, u) : undefined }; }
 /* B360 PACKAGES */
 const TEMPLATE_PRICE = 7000;
-const TIER_NAME = { free: 'Free', personal: 'Pantry', specialist: 'Banquet', advanced: 'Feast' };
+const TIER_NAME = { free: 'Free', personal: 'Pantry', specialist: 'Greenwell', advanced: 'Banquet' };
 const TIER_RANK = { free: 0, personal: 1, specialist: 2, advanced: 3 };
 function accountOrders(db, user) {
   const linked = new Set(Array.isArray(user.linkedOrders) ? user.linkedOrders : []);
@@ -5992,7 +5992,7 @@ async function handleTemplateRoutes(req, res, url) {
   const plan = user ? accountPlan(db, user) : { level: 'free', templates: [], allTemplates: false, templateZip: false };
   const logoPath = join(root, 'bulamu360-logo.png');
   if (m[1] === 'all' && m[2] === 'zip') {
-    if (!plan.templateZip) { sendJson(res, 403, { ok: false, error: 'The full template pack comes with the Feast package.' }); return true; }
+    if (!plan.templateZip) { sendJson(res, 403, { ok: false, error: 'The full template pack comes with the Banquet package.' }); return true; }
     const zip = zipFiles(Object.keys(TEMPLATES).map(id => ({ name: 'Bulamu360 Tracking Templates/Bulamu360_' + TEMPLATES[id].file + '.pdf', data: templatePdf(id, { logoPath }) })));
     res.writeHead(200, securityHeaders({ 'Content-Type': 'application/zip', 'Content-Length': zip.length, 'Content-Disposition': 'attachment; filename="Bulamu360-Tracking-Templates.zip"', 'Cache-Control': 'no-store' }));
     res.end(zip); return true;
